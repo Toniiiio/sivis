@@ -249,12 +249,14 @@ create_sivis <- function(cbData){
   }
 }
 
+if(FALSE){
+  fl <- "httpsjobsraytheoncomsearchjobsresultsActiveFacetID0CurrentPage3RecordsPerPage15Distance50RadiusUnitTy.RData"
+  load(file = paste0("R/fromWeb/", fl))
+  testRun <- TRUE
+  ff <- use_sivis(sivis, testRun = testRun)
+}
 
-# fl <- "httpscareerbelufthansacomglobaljobboard_apisearchdata7B22LanguageCode223A22DE222C22SearchParameters2.RData"
-# load(file = paste0("R/fromWeb/", fl))
-# use_sivis(sivis)
-
-use_sivis <- function(sivis){
+use_sivis <- function(sivis, testRun = TRUE){
   url = sivis$url
   cbdata = sivis$browserOutput
   getRes = sivis$GETContents[[1]]
@@ -294,10 +296,9 @@ use_sivis <- function(sivis){
 
   docType
   extractPathes = list()
-  testRun = TRUE
   iterNr <- 0
 
-  extracts_data(
+  result <- extracts_data(
     responseString = responseString,
     docType = docType,
     XPathFromBrowser = XPathFromBrowser,
@@ -307,6 +308,7 @@ use_sivis <- function(sivis){
     testRun = testRun,
     iterNr = iterNr
   )
+  return(result)
 }
 
 
@@ -319,7 +321,7 @@ extracts_data <- function(responseString, docType = NULL, XPathFromBrowser = "",
   iterNr = iterNr + 1
   if(iterNr > 6) stop("Too many iterations. Want to avoid getting caught in an infinite loop.")
 
-  if(is.null(docType)) docType <- findDocType(responseString = responseString)
+  if(is.null(docType)) docType <- findDocType(responseString = responseString, targetValues = targetValues)
   docType
   resourceType <- sivis$cbData$request$`_resourceType`
   print(docType)
@@ -338,7 +340,7 @@ extracts_data <- function(responseString, docType = NULL, XPathFromBrowser = "",
     # The necessary extraction step is saved in variable above: extractPathes.
     docType <- "application/json"
   }
-
+  docType
   if(docType == "application/json"){
     jsonStruct <- extract_JSON(
       responseString = responseString,
@@ -368,11 +370,7 @@ extracts_data <- function(responseString, docType = NULL, XPathFromBrowser = "",
         testRun = testRun
       )
     }
-
-    jsonStruct$resultValues
-  }
-
-  if(docType == "text/html"){
+  }else if(docType == "text/html"){
     maxCheck = 5
     htmlResult <- extract_HTML(
       responseString = responseString,
@@ -384,6 +382,7 @@ extracts_data <- function(responseString, docType = NULL, XPathFromBrowser = "",
     htmlResult
     htmlResult$extractPathes
     htmlResult$allFound
+    print(htmlResult$allFound)
     if(htmlResult$allFound){
       if(testRun) return(TRUE)
       # have to set xpath to environ/global variable, so that later on xpathes can be added.
@@ -491,7 +490,9 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
     select(2) %>%
     unname %>%
     unique %>%
-    as.character
+    unlist %>%
+    .[1]
+
   xpath
   resultValues <- doc %>% html_nodes(xpath = xpath) %>% html_text
   targetValues %<>% gsub(pattern = "\n|\r", replacement = "", fixed = TRUE) %>% trimws
@@ -500,9 +501,10 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
   approximate <- TRUE
   if(approximate){
     lengths <- targetValues %>% nchar
-    allFound <- adist(x = targetValues, y = resultValues) %>%
+    similarityRatio <- adist(x = targetValues, y = resultValues) %>%
       apply(MARGIN = 1, FUN = min) %>%
-      divide_by(lengths) %>%
+      divide_by(lengths)
+    allFound <- similarityRatio %>%
       magrittr::is_less_than(0.05) %>%
       all
   }else{
@@ -559,7 +561,8 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list()){
   distMatrix <- adist(x = targetValues, y = resultValues)
   distances <- apply(distMatrix, 1, min)
 
-  allFound <- all(distances / nchar(targetValues) < 0.1)
+  # config parameter
+  allFound <- (distances / nchar(targetValues) < 0.1) %>% {sum(.) / length(.)} > 0.9
   if(length(resultValues) > length(targetValues)){
     message("Found more values than expected!")
   }
@@ -648,7 +651,7 @@ addXPath <- function(){
 # ---> if html and html, then html has to have a script tag
 
 # complete list of meme types: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types
-findDocType <- function(responseString){
+findDocType <- function(responseString, targetValues){
 
   isJSON <- jsonlite:::validate(responseString)
 
@@ -660,14 +663,23 @@ findDocType <- function(responseString){
     error = function(e) return(FALSE)
   )
 
-  ScriptJSON <- gregexpr(
+  jsons <- gregexpr(
     pattern = "\\{(?:[^{}]|(?R))*\\}",
-    text = "responseString",
+    text = responseString,
     perl = T
   ) %>%
-  # regmatches(x = responseString)
-    length %>%
-    is_greater_than(0)
+  regmatches(x = responseString) %>%
+  unlist
+
+  #sapply(jsons, grepl, x = jsons, fixed = TRUE, USE.NAMES = FALSE)
+  #grep(pattern = jsons, )
+  if(length(jsons)){
+    # config parameter
+    matches <- sapply(targetValues, grepl, fixed = TRUE, x = jsons) %>% as.matrix
+    ScriptJSON <- matches %>% rowSums() %>% {. / length(targetValues)} %>% magrittr::is_greater_than(0.95) %>% which
+  }else{
+    ScriptJSON <- FALSE
+  }
 
   #### todo: refactor this shit
   if(isJSON){
@@ -1756,10 +1768,9 @@ subsetByStr3 <- function(lstRaw, arr){
 }
 
 
-# targetValue <- targetValues[12]
+# targetValue <- targetValues[4]
 # targetValue <- "i Kontrolingu (M/F)"
 matchStrings <- function(targetValue, candidates){
-  # this one is redundant and the below better?
 
   directMatch <- which(candidates == targetValue)
   distances <- adist(x = candidates, y = targetValue) %>% c
@@ -1785,7 +1796,10 @@ matchStrings <- function(targetValue, candidates){
   #   winnerIndex <- c("levenDist" = which.min(distances))
   # }
   # todo: check how to use. Currently hardly in use, because of approximate string match above.
-  if(!length(winnerIndex)) stop(glue("no match for targetValue: {targetValue}"))
+  if(!length(winnerIndex)){
+    warning(glue("no match for targetValue: {targetValue}"))
+    return(NULL)
+  }
   names(winnerIndex) <- "directMatch"
   return(winnerIndex)
 }
@@ -1815,7 +1829,7 @@ allJSONValues <- function(jsonContent, targetValues){
     )
   }
 
-  targetKeys <- lastKeys[matchIdx]
+  targetKeys <- lastKeys[matchIdx %>% as.numeric()]
   targetKey <- targetKeys %>% table %>% which.max %>% names
   texts <- jsonContentFlat[lastKeys %in% targetKey] %>% unname
 
@@ -1829,7 +1843,7 @@ allJSONValues <- function(jsonContent, targetValues){
     numbers <- gsub(pattern = targetKeysSlim, replacement = "", x = targetKeys) %>% as.numeric
     seqNumber <- numbers %>% sort %>% diff %>% table %>% which.max %>% names %>% as.numeric
     if(!length(seqNumber)){
-      targetKey <-targetKeys %>% unique
+      targetKey <- targetKeys %>% unique
     }else{
       amtSlimKeys <- targetKeysSlim %>% length
       if(amtSlimKeys == 1){
