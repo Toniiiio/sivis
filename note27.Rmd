@@ -1,0 +1,24 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is a scraping suggestion for the following website: 
+https://www.lockheedmartinjobs.com/search-jobs/
+The required content was found in the source code. Therefore, rvest was chosen over RSelenium due to performance reasons.
+
+```{r}
+options(stringsAsFactors = FALSE)
+library(rvest)
+library(DT)
+url <- "https://www.lockheedmartinjobs.com/search-jobs/"
+xpath <- data.frame("
+	/html/body/div/main/div/div/section/section/ul/li/a/span[1]
+")
+data <- read_html(x = url) %>% html_nodes(xpath = as.character(xpath)) %>% html_text()
+dt <- datatable(
+	data = data.frame(data),
+	options = list(pageLength = 10)
+)
+dt
+```

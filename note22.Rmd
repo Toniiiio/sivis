@@ -1,0 +1,78 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is a scraping suggestion for the following website: .
+The required content was found in a GET request.
+
+```{r}
+library(DT)
+library(httr)
+# ", 1 + (nr - 1)*maxItems,"
+# ", maxItems*nr,"
+
+scraper <- list(
+	urlHTTP = "",
+	urlGen = function(nr){
+		maxItems <- 100
+		paste0("https://www.biogen.com/bin/dxp/career/search?searchKey=&category=null&location=Switzerland-Zug%20Headquarters&region=null&joblevel=null&jobtype=null")
+	},
+	base = "content",
+	baseFollow = NULL,
+	targetKeys = list("name")
+)
+
+
+output <- list()
+res <- "InitWithValue"
+nr <- 1
+
+while(length(res)){
+	Sys.sleep(0.2)
+	print(nr)
+	url <- scraper$urlGen(nr)
+	
+	res <- scheduledGET(url = url, targetKeys = scraper$targetKeys, base = scraper$base, baseFollow = scraper$baseFollow)$res
+	output[[nr]] <- res
+	nr <- nr + 1
+
+	######## INITIALLY ONLY ONE ROUND
+	res <- c()
+	######## INITIALLY ONLY ONE ROUND
+}
+tbl <- do.call(what = rbind, args = output)
+datatable(tbl)
+
+library(httr)
+
+
+```
+
+Potential new fields to consider:
+
+```{r}
+library(shiny)
+
+choiceNames <- paste(paste("<b>", names(neighbours), "</b>"), as.character(neighbours), sep = ": ")
+choiceNames <- lapply(choiceNames, HTML)
+
+targetValue <- "12"
+ui <- fluidPage(
+	actionButton(inputId = "updateDocument", label = "Add selected keys to document:"),
+	br(),
+	checkboxGroupInput(inputId = "additionalKeys", label = "Additional keys to parse: ", choiceValues = as.list(names(neighbours)),
+	selected = "name", choiceNames = choiceNames)
+)
+server <- function(input, output, session){
+	observeEvent(eventExpr = input$updateDocument,{
+		print(input$additionalKeys)
+		file.remove("Notebook_Scraping.Rmd")
+		sivis$targetKeys <-  sapply(input$additionalKeys, strsplit, split = "[.]", USE.NAMES = FALSE)
+		createDocumentGETW()
+		stopApp(returnValue = invisible())
+	})
+}
+
+runApp(appDir = shinyApp(ui, server), launch.browser = rstudioapi::viewer)
+```
