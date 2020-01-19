@@ -44,11 +44,17 @@ print <- function(x, max = 500){
 # https://careers.blackrock.com/job-search-results #### cant select all data
 # https://jobs.cvshealth.com/ListJobs?prefilters=none&CloudSearchLocation=none
 
+# WRONG REQUEST in
+# https://mastercard.jobs/jobs/#3
+# and https://www.att.jobs/search-jobs
 
 #only for one job: https://careers.kronos.com/
 
 # encoding:
 # httpscareerslillycomsearchjobs - request ist korrekt aus R heraus. Encoding von sivis chrome ist falsch. seite --> https://careers.lilly.com/search-jobs
+
+############encoding#################
+# chinese jobs: https://pfizer.wd1.myworkdayjobs.com/PfizerCareers
 
 ###### cant get data:
 # cant get data: https://emerson.taleo.net/careersection/ex/jobsearch.ftl?lang=de.
@@ -120,11 +126,13 @@ createScraper <- function(){
   sivis$cbData <- readClipboard() %>% fromJSON
   sivis$cbData$request$`_fromCache`
   sivis$cbData
+  sivis$cbData$request$request$url
 
   cbData <- sivis$cbData
   create_sivis(cbData)
   testRun = FALSE
-  use_sivis(sivis, testRun = testRun)
+  success <- use_sivis(sivis, testRun = testRun)
+  success
 }
 
 
@@ -142,7 +150,8 @@ create_sivis <- function(cbData){
   resourceType <- cbData$request$`_resourceType`
 
   pattern <- "file:///"
-  url = cbData$request$request$url
+  pageUrl <- cbData$request$request$url
+  url = cbData$request$request$url # alternative: cbData$clipBoardText$pageUrl
   ##url <- cbData$clipBoardText$pageUrl
   if(grepl(pattern = pattern, x = url)){
     sivis$browserOutput$pageUrl %<>% gsub(pattern = pattern, replacement = "")
@@ -157,7 +166,6 @@ create_sivis <- function(cbData){
               selectedText = {sivis$browserOutput$selectedText[1]},... will likely change over time."))
   }
 
-  pageUrl <- cbData$request$request$url
   cbData$request$response
 
   responseType <- cbData$request$response$content$mimeType
@@ -256,7 +264,12 @@ create_sivis <- function(cbData){
 
 if(FALSE){
   fl <- "httpsjobsdisneycareerscomsearchjobsresultsActiveFacetID0CurrentPage3RecordsPerPage15Distance50RadiusU.RData"
+  fl <- "httpsjobsapigooglemcloudioapijobsearchcallbackjobsCallbackpageSize10offset0companyNamecompanies2Fc3f8.RData"
+
+
   fl <- "httpscareersdupontcomjobsearchajaxcallbacksgetJobsphpcategory5B5Dorganization5B5Dtype5B5Dlocation5B5D.RData"
+  fl <- "httpscareersintuitivecomapijobspage2internalfalseuserIdc584a5e0ba114d19b2e225622b9e90e7sessionId773f7.RData"
+  fl <- "httpswwwcapitalonecareerscomsearchjobsresultsActiveFacetID0CurrentPage3RecordsPerPage15Distance50Radi.RData"
   load(file = paste0("R/fromWeb/", fl))
   testRun <- FALSE
   ff <- use_sivis(sivis, testRun = testRun)
@@ -325,6 +338,7 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
   # this function can get called by itself if the targetvalues have to be extracted "across multiple levels". E.g. if within
   # response is a json with an object including html.
   # If it is called a second time, the document type (html) is not known before and has to be identified.
+  print(iterNr)
   iterNr = iterNr + 1
   if(iterNr > 6) stop("Too many iterations. Want to avoid getting caught in an infinite loop.")
 
@@ -356,7 +370,7 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
     )
     str(jsonStruct)
     jsonStruct$extractPathes$json$isLargeHTML
-
+    extractPathes <- c(extractPathes, jsonStruct$extractPathes)
     print(jsonStruct$allFound)
     if(jsonStruct$allFound){
       if(testRun) return(TRUE)
@@ -370,6 +384,11 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
       responseString = jsonStruct$resultValues
       extractPathes = jsonStruct$extractPathes
       docType <- NULL
+      XPathFromBrowser <- XPathFromBrowser
+      iterNr <- iterNr
+      targetValues <- targetValues
+      testRun <- testRun
+
       extracts_data(
         responseString = responseString,
         extractPathes = extractPathes,
@@ -380,6 +399,8 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
         testRun = testRun
       )
     }
+  # nest in else if otherwise json with html is extracted and jumped right into html extraction
+  # without adjusting the inputs
   }else if(docType == "text/html"){
     maxCheck = 5
     htmlResult <- extract_HTML(
@@ -394,12 +415,13 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
     htmlResult$allFound
     if(htmlResult$allFound){
       if(testRun) return(TRUE)
-      # have to set xpath to environ/global variable, so that later on xpathes can be added.
+      # have to set xpath to environ/global variable, so that later on xpathes can be added
       sivis$XPathes <- htmlResult$extractPathes$xpath
       extractPathes = htmlResult$extractPathes
-      createDocumentGET(
-        pageUrl = pageUrl,
-        cbdata = cbdata,
+      getRes = NULL
+      url <- pageUrl
+      createDocument(
+        pageUrl = url,
         extractPathes = extractPathes
       )
     }else{
@@ -407,6 +429,9 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
       extractPathes = htmlResult$extractPathes
       docType = NULL
       XPathFromBrowser = ""
+      iterNr <- iterNr
+      targetValues <- targetValues
+      testRun <- testRun
       extracts_data(
         responseString = responseString,
         extractPathes = extractPathes,
@@ -536,7 +561,7 @@ JSON_from_String <- function(str, targetValues = NULL, indexNr = NULL){
   #### recursion limit reached in PCRE for element 1
 
   allJSONS <- gregexpr(
-    pattern = "\\{(?:[^{}]|(?R))*?\\}",
+    pattern = "\\{(?:[^{}]+|(?R))*?\\}",
     perl = TRUE,
     text = str
   ) %>%
@@ -567,12 +592,16 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list()){
   targetValues %<>% gsub(pattern = "\n|\r", replacement = "") %>% trimws
   resultValues <- JSONValues$texts %>% gsub(pattern = "\n|\r", replacement = "") %>% trimws
 
-
   distMatrix <- adist(x = targetValues, y = resultValues)
-  distances <- apply(distMatrix, 1, min)
+  distances <- apply(distMatrix, 1, min, na.rm = TRUE)
 
   # config parameter
   allFound <- (distances / nchar(targetValues) < 0.1) %>% {sum(.) / length(.)} > 0.9
+
+  hasNAs <- JSONValues$texts %>% is.na %>% any
+  if(allFound & hasNAs) warning("All target values found, but extraction of JSON values yields additional NAs")
+  if(hasNAs) warning("Extraction of JSON values yields NAs")
+
   if(length(resultValues) > length(targetValues)){
     message("Found more values than expected!")
   }
@@ -824,14 +853,18 @@ createDocumentPOST <- function(url, cbdata, cbdataFlat){
 #   dplyr::filter(match == TRUE)
 # xx <- ff$jsons %>% jsonlite::fromJSON()
 
-extractPath <- extractPathes[2:length(extractPathes)]
-create_Addit_Extract <- function(extractPath){
-  type <- extractPath %>% names
-  path <- extractPath %>% unlist %>% unname
-  if(type == "xpath"){
-    return(
-      glue("\tresponse %<>% read_html %>% html_nodes(xpath = '{path}') %>% html_text")
-    )
+# extractPath <- extractPathes[2:length(extractPathes)]
+create_Addit_Extract <- function(extractPathes){
+  if(!length(extractPathes)) return(NULL)
+  nr <- 1
+  for(nr in 1:length(extractPathes)){
+    type <- extractPathes[nr] %>% names
+    path <- extractPathes[type] %>% unlist %>% unname
+    if(type == "xpath"){
+      return(
+        glue("\tresponse %<>% read_html %>% html_nodes(xpath = '{path}') %>% html_text")
+      )
+    }
   }
 }
 
@@ -844,17 +877,28 @@ createDocumentGET <- function(url, cbdata, getRes, extractPathes = NULL){
   #getRes %>% toString
   sivis$browserOutputRaw <- cbdata
   browserOutputRaw <- cbdata
-  sivis$initGET <- GetRequest(getRes = getRes, browserOutputRaw = browserOutputRaw)
 
-  sivis$targetKeys <-  list(sivis$initGET$targetKey)
-  if(!is.null(extractPathes)){
-    for(nr in 2:length(extractPathes)){
-      additionalExtractions <- create_Addit_Extract(extractPath = extractPathes[nr])
-    }
+  sivis$targetKeys <-  list(extractPathes$json$targetKey)
+
+  #todo; make better
+  extractType <- extractPathes[1] %>% names %>% toString
+  if(extractType == "scriptJsonIndex"){
+    idx <- extractPathes[[1]]
+    jsonFromString <- TRUE
+  }else{
+    jsonFromString <- NULL
   }
 
-  createDocumentGETW(additionalExtractions = additionalExtractions)
+  additionalExtractions <- create_Addit_Extract(extractPath = extractPathes)
+
+  createDocumentGETW(
+    jsonFromString = jsonFromString,
+    additionalExtractions = additionalExtractions,
+    extractPathes = extractPathes
+  )
 }
+
+
 
 
 url <- sivis$browserOutputRaw$url
@@ -862,7 +906,13 @@ base <- deparse(dput(sivis$initGET$base))
 baseFollow <- deparse(dput(sivis$initGET$baseFollow))
 targetKeys <- deparse(sivis$targetKeys, width.cutoff = 500L)
 
-baseGETTemplate <- function(url, base, baseFollow, targetKeys, isLargeHTML = FALSE){
+# this covers: text2json, json extraction and early exit for huge html.
+# does not cover: follow-up process of html or only html
+baseGETTemplate <- function(url, base, baseFollow, targetKeys, isLargeHTML = FALSE, jsonFromString = FALSE){
+  # todo refactor this
+  if(is.null(isLargeHTML)) isLargeHTML <- FALSE
+  if(is.null(jsonFromString)) jsonFromString <- FALSE
+
   paste0(c(
     'library(DT)',
     'library(httr)',
@@ -878,7 +928,8 @@ baseGETTemplate <- function(url, base, baseFollow, targetKeys, isLargeHTML = FAL
     paste0('\tbase = ', base,','),
     paste0('\tbaseFollow = ', baseFollow,','),
     paste0('\ttargetKeys = ', targetKeys, ','),
-    paste0('\tisLargeHTML = ', isLargeHTML),
+    paste0('\tisLargeHTML = ', isLargeHTML, ','),
+    paste0('\tjsonFromString = ', jsonFromString),
     ')',
     '',
     '',
@@ -891,20 +942,21 @@ baseGETTemplate <- function(url, base, baseFollow, targetKeys, isLargeHTML = FAL
     '\tprint(nr)',
     '\turl <- scraper$urlGen(nr)',
     '\t',
-    '\tresponse <- scheduledGET(url = url, targetKeys = scraper$targetKeys, base = scraper$base, baseFollow = scraper$baseFollow, isLargeHTML = scraper$isLargeHTML)$res'),
+    '\tresponse <- scheduledGET(url = url, targetKeys = scraper$targetKeys, base = scraper$base, baseFollow = scraper$baseFollow, isLargeHTML = scraper$isLargeHTML, jsonFromString = scraper$jsonFromString)$res'),
     collapse = "\n")
 }
 
-createDocumentGETW <- function(additionalExtractions = NULL){
+createDocumentGETW <- function(jsonFromString = NULL, additionalExtractions = NULL, extractPathes = NULL){
   assign(x = "neighbours", value = unlist(sivis$initGET$neighbours), envir = .GlobalEnv)
 
   fileName <- sivis[["fileName"]]
   if(is.null(fileName)) fileName <- "Notebook_Scraping.Rmd"
   url <- sivis$browserOutputRaw$url
-  base <- deparse(dput(sivis$initGET$base))
-  baseFollow <- deparse(dput(sivis$initGET$baseFollow))
 
-  isLargeHTML <- sivis$initGET$isLargeHTML
+  base <- extractPathes$json$base %>% dput %>% deparse
+  baseFollow <- extractPathes$json$baseFollow %>% dput %>% deparse
+
+  isLargeHTML <- extractPathes$json$isLargeHTML
   targetKeys <- deparse(sivis$targetKeys, width.cutoff = 500L)
   writeLines(
     text = paste0(c('---',
@@ -916,7 +968,15 @@ createDocumentGETW <- function(additionalExtractions = NULL){
                     'The required content was found in a GET request.',
                     '',
                     '```{r}',
-                    baseGETTemplate(url = url, base = base, baseFollow = baseFollow, targetKeys = targetKeys, isLargeHTML = isLargeHTML),
+                    baseGETTemplate(
+                      url = url,
+                      base = base,
+                      baseFollow = baseFollow,
+                      targetKeys = targetKeys,
+                      isLargeHTML = isLargeHTML,
+                      jsonFromString = jsonFromString
+                    ),
+
                     additionalExtractions,
                     '\toutput[[nr]] <- response',
                     '\tnr <- nr + 1',
@@ -967,23 +1027,45 @@ createDocumentGETW <- function(additionalExtractions = NULL){
 
 
 createDocument <- function(pageUrl, extractPathes){
+
   XPathes <- sivis$XPathes
   OneXPathOnly <- length(XPathes) == 1
   fileName <- sivis[["fileName"]]
   if(is.null(fileName)) fileName <- "Notebook_Scraping.Rmd"
   print(XPathes)
 
-  library(httr)
-
+  is.null(extractPathes$json)
+  url <- sivis$browserOutput$pageUrl
+  print("url")
+  print(url)
   if(is.null(extractPathes$json)){
-    getTemplate <- ""
+    getTemplate <- paste0(c('library(httr)',
+        'library(DT)',
+        paste0('url <- "', url, '"'),
+        'response <- url %>% GET %>% content(type = "text")'
+      ), collapse = "\n"
+    )
+    getFinishTemplate <- ""
+    indent <- ""
+    displayResults <- 'response %>% data.frame %>% DT::datatable()'
   }else{
-    url <- sivis$browserOutputRaw$url
-    base <- deparse(dput(sivis$initGET$base))
-    baseFollow <- deparse(dput(sivis$initGET$baseFollow))
+    indent <- "\t"
+    sivis$initGET <- extractPathes$json
+    base <- deparse(dput(extractPathes$json$base))
+    baseFollow <- deparse(dput(extractPathes$json$baseFollow))
     targetKeys <- deparse(sivis$targetKeys, width.cutoff = 500L)
-    isLargeHTML <- sivis$initGET$isLargeHTML
+    isLargeHTML <- extractPathes$json$isLargeHTML
     getTemplate <- baseGETTemplate(url, base, baseFollow, targetKeys, isLargeHTML = isLargeHTML)
+    getFinishTemplate <-  paste0(c('\toutput[[nr]] <- response',
+    '\tnr <- nr + 1',
+    '',
+    '\t######## INITIALLY ONLY ONE ROUND',
+    '\tresponse <- c()',
+    '\t######## INITIALLY ONLY ONE ROUND',
+    '}'),
+    collapse = "\n"
+    )
+    displayResults <- "do.call(rbind, output) %>% c %>% data.frame %>% DT::datatable()"
   }
 
   if(OneXPathOnly){
@@ -1004,15 +1086,30 @@ createDocument <- function(pageUrl, extractPathes){
                      'dt'
     ), collapse = "\n")
 
-
-    rcode <- paste(c('options(stringsAsFactors = FALSE)',
-                     'library(rvest)',
+    rcode_deprecated2 <- paste(c('options(stringsAsFactors = FALSE)',
+                     'library(httr)',
+                     'library(xml2)',
                      'library(DT)',
+                     paste0('url <- "', url, '"'),
+                     'response <- url %>% GET %>% content(type = "text")',
                      getTemplate,
                      'xpath <- data.frame(',
                      paste(c('\t"', XPathes, '"'), collapse = ""),
                      ')',
-                     'response %<>% read_html %>% html_nodes(xpath = as.character(xpath)) %>% html_text()'
+                     'response %<>% read_html %>% html_nodes(xpath = as.character(xpath)) %>% html_text()',
+                     getFinishTemplate
+    ), collapse = "\n")
+
+
+
+    rcode <- paste(c('options(stringsAsFactors = FALSE)',
+                     'library(xml2)',
+                     getTemplate,
+                     paste(c(indent, 'xpath <- data.frame('), collapse = ""),
+                     paste(c(indent, '\t"', XPathes, '"'), collapse = ""),
+                     paste(c(indent, ')'), collapse = ""),
+                     paste(c(indent, 'response %<>% read_html %>% html_nodes(xpath = as.character(xpath)) %>% html_text()'), collapse = ""),
+                     getFinishTemplate
     ), collapse = "\n")
 
     #try(eval(parse(text = rcode), envir = .GlobalEnv))
@@ -1028,7 +1125,7 @@ createDocument <- function(pageUrl, extractPathes){
                      '',
                      '```{r}',
                      rcode,
-                     'response %>% data.frame %>% DT::datatable()',
+                     displayResults,
                      '```'),
                    collapse = "\n"),
       con = fileName
@@ -1490,7 +1587,7 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
   while(!XPathFound){
     tagName <- iterTag %>% html_name
     # print(iterTag)
-    # print(tagName)
+    print(tagName)
     tagNameInsert <- tagName
     if(byIndex){
       childrenAll <- iterTag %>%
@@ -1504,6 +1601,8 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
       # other targetStrings. In current implementation this includes also
       # indexes of all parent tags, since their html_text also include
       # the other targetStrings.
+
+      # refactor better grepl?
       hasAllChildren <- sapply(allText, grep, x = childrenMatchText, fixed = TRUE) %>%
         lengths %>% `>`(0) %>% all
       # hasAllChildren <- sapply(allText, grepl, x = childrenMatchText, fixed = TRUE) %>%
@@ -1942,7 +2041,11 @@ matchStrings <- function(targetValue, candidates){
 # have multiple targetkeys - have to account for numbers and possibly also more values.
 allJSONValues <- function(jsonContent, targetValues){
   jsonContentFlat <- unlist(jsonContent)
-  if(is.null(names(jsonContentFlat))) stop("content can not be parsed - transformation to data.frame failed. Require json that can be parsed to data.frame as input")
+
+  hasNames <- jsonContentFlat %>% names %>% is.null
+  if(hasNames){
+    stop("content can not be parsed - transformation to data.frame failed. Require json that can be parsed to data.frame as input")
+  }
   splitNames <- names(jsonContentFlat) %>% strsplit(split = "[.]")
   lastKeys <- sapply(X = splitNames, FUN = tail, n = 1)
 
@@ -1950,7 +2053,8 @@ allJSONValues <- function(jsonContent, targetValues){
   candidates <- jsonContent %>% unlist() %>% trimws
 
   matchIdx <- sapply(targetValues, matchStrings, candidates = candidates) %>%
-    unlist %>% unname
+    unlist %>%
+    unname
   # matchIdxRaw <- sapply(targetValues, FUN = function(targetValue){
   #   which(trimws(unlist(jsonContent)) == trimws(targetValue))
   # }, USE.NAMES = FALSE)
@@ -1964,7 +2068,10 @@ allJSONValues <- function(jsonContent, targetValues){
   }
 
   targetKeys <- lastKeys[matchIdx %>% as.numeric()]
-  targetKey <- targetKeys %>% table %>% which.max %>% names
+  targetKey <- targetKeys %>%
+    table %>%
+    which.max %>%
+    names
   texts <- jsonContentFlat[lastKeys %in% targetKey] %>% unname
 
   # todo: how do i know if i have an html below or close match
@@ -1981,7 +2088,7 @@ allJSONValues <- function(jsonContent, targetValues){
 
   # config parameter
   isLargeHTML <- texts %>% stringr::str_count(pattern = "<") %>% is_greater_than(5)
-  if(isLargeHTML){
+  if(all(isLargeHTML)){ # all or any?
     return(
       list(
         isLargeHTML = TRUE,
@@ -2003,7 +2110,7 @@ allJSONValues <- function(jsonContent, targetValues){
     }else{
       amtSlimKeys <- targetKeysSlim %>% length
       if(amtSlimKeys == 1){
-        targetKey <- paste0(targetKeysSlim, "[0-9]*")
+        targetKey <- paste0(targetKeysSlim, "[0-9]*$")
       }else{
         stop("Have too many targetKeys while extracting targetValues in JSON.")
       }
@@ -2014,11 +2121,16 @@ allJSONValues <- function(jsonContent, targetValues){
     # }
   }
 
+  # to decide: TradeOff here between direct match and fuzzy match.
+  # example: https://pfizer.wd1.myworkdayjobs.com/PfizerCareers. hast key: text and text1, text2, text3, where the latter are not of interest.
+  idx <- which(targetKey == lastKeys)
+  lastKeys[idx]
   idx <- grepl(pattern = targetKey, x = lastKeys) %>% which
+  lastKeys[idx]
   texts <- jsonContentFlat[idx] %>% unname
-
+  print(texts)
   #idx <- c(which(texts == targetValue))
-  parentElemNmsRaw <- strsplit(names(jsonContentFlat)[matchIdx[1]], split = "[.]") %>% unlist
+  parentElemNmsRaw <- jsonContentFlat %>% names %>% .[matchIdx[1]] %>% strsplit(split = "[.]") %>% unlist
   match <- c(parentElemNmsRaw %>% head(n = -1))
 
   arr <- list(str = match, iter = matchIdx[1])
@@ -2035,7 +2147,7 @@ allJSONValues <- function(jsonContent, targetValues){
 
 
 
-GetRequest <- function(getRes, browserOutputRaw){
+GetRequest <- function(getRes, browserOutputRaw, extractPathes){
 
   print(paste0("Status code is: ", http_status(getRes)$message))
   if(getRes$status_code != 200){
@@ -2045,12 +2157,32 @@ GetRequest <- function(getRes, browserOutputRaw){
   if(getRes$headers$`content-type` != "application/json; charset=utf-8"){
     warning("Reponse is not of type JSON")
   }
-  content(getRes) %>% showHtmlPage
+
+  #content(getRes) %>% showHtmlPage
   bo <- browserOutputRaw #getScrapeInfo(toLower = FALSE)
 
   contInit <- getRes %>% content(type = "text", encoding = "UTF-8")
   cont <- contInit
-  isJSON <- jsonlite:::validate(cont)
+
+  # todo: could not only be the first one, but one of the previous?
+  extractionType <- names(extractPathes[1]) %>% toString
+  if(extractionType == "scriptJsonIndex"){
+    idx <- extractPathes[[1]]
+    cont %<>% gregexpr(
+      pattern = "\\{(?:[^{}]+|(?R))*?\\}",
+      perl = TRUE,
+      text = str
+    ) %>%
+      regmatches(x = str) %>%
+      unlist %>%
+      .[1]
+
+    isJSON <- TRUE
+  }else{
+    isJSON <- jsonlite:::validate(cont)
+  }
+
+  isJSON
   if(!isJSON){
     # Example: https://www.dmk.de/karriere/stellenangebote/?no_cache=1.
     doc <- tryCatch(xml2::read_html(cont), error = function(e) return(NULL))
@@ -2097,7 +2229,7 @@ GetRequest <- function(getRes, browserOutputRaw){
     # contentGET <- cont %>% fromJSON
     # gg <- allJSONValues(jsonContent = contentGET, targetValues = bo$selectedText)
   }else{
-    contentGET <- getRes %>% content
+    #contentGET <- getRes %>% content
     # if(typeof(contentGET) == "list"){
     #   index <- sapply(bo$selectedText, grepl, contentGET) %>% rowSums %>% which.max
     #   doc <- tryCatch(xml2::read_html(contentGET[[index]]), error = function(e) return(NULL))
@@ -2114,7 +2246,7 @@ GetRequest <- function(getRes, browserOutputRaw){
     #   }
     # }else{
     #todo: see for better option than checkcing only first value of bo$expectedOutput[1]
-    jsonContent = contentGET
+    jsonContent = cont %>% jsonlite::fromJSON()
     targetValues = bo$selectedText
     gg <- allJSONValues(
       jsonContent = jsonContent,
@@ -2142,6 +2274,7 @@ GetRequest <- function(getRes, browserOutputRaw){
   }
 }
 
+##### e.g for httpsjobsapiinternalmcloudioapijobcallbackjobsCallbackoffset49sortfieldopen_datesortorderdescendingfa
 # desired functionality for json with html:
 # getRes <- GET(url = url)
 # if(getRes$status_code != 200) return(NULL)
@@ -2158,14 +2291,26 @@ GetRequest <- function(getRes, browserOutputRaw){
 
 ### --> or i make two seperate functions? one for json and one for multiple extractionpathes??
 
-scheduledGET <- function(url, targetKeys, base, baseFollow = NULL, isLargeHTML = FALSE){
+scheduledGET <- function(url, targetKeys, base, baseFollow = NULL, isLargeHTML = FALSE, jsonFromString = NULL){
   if(is.null(base)){
     stop("Parameter base, provided to scheduledGET(), is NULL - please provide a valid subset value.")
   }
 
   getRes <- GET(url = url)
   if(getRes$status_code != 200) return(NULL)
-  contentGET <- content(getRes)
+  contentGET <- content(getRes, type = "text")
+
+  if(!is.null(jsonFromString)){
+    contentGET %<>% gregexpr(
+      pattern = "\\{(?:[^{}]+|(?R))*?\\}",
+      perl = TRUE
+    ) %>%
+      regmatches(x = contentGET) %>%
+      unlist %>%
+      .[1]
+  }
+
+  contentGET %<>% jsonlite::fromJSON()
   contentGETFlat <- unlist(contentGET)
 
   splitNames <- names(contentGETFlat) %>% strsplit(split = "[.]")
@@ -2173,7 +2318,7 @@ scheduledGET <- function(url, targetKeys, base, baseFollow = NULL, isLargeHTML =
 
   # todo;do i neeed two of these subsetbystr functions?
   if(is.null(base)) base <- NA
-  if(is.na(base)){
+  if(any(is.na(base))){
     baseElems <- contentGET[[1]]
   }else{
     baseElems <- subsetByStr2(contentGET, base)
@@ -2287,6 +2432,36 @@ createBody <- function(bodyRaw){
   header[is.na(body)] <- ""
   return(body)
 }
+
+createDocumentGET_deprecated <- function(url, cbdata, getRes, extractPathes = NULL){
+  rstudioapi::documentSave(id = "Notebook_scraping.Rmd")
+
+  #getRes %>% showHtmlPage
+  #getRes %>% toString
+  sivis$browserOutputRaw <- cbdata
+  browserOutputRaw <- cbdata
+  sivis$initGET <- GetRequest(
+    getRes = getRes,
+    browserOutputRaw = browserOutputRaw,
+    extractPathes = extractPathes
+  )
+
+  sivis$targetKeys <-  list(sivis$initGET$targetKey)
+
+  #todo; make better
+  extractType <- extractPathes[1] %>% names %>% toString
+  if(extractType == "scriptJsonIndex"){
+    idx <- extractPathes[[1]]
+    jsonFromString <- TRUE
+  }else{
+    jsonFromString <- NULL
+  }
+
+  additionalExtractions <- create_Addit_Extract(extractPath = extractPathes)
+
+  createDocumentGETW(jsonFromString = jsonFromString, additionalExtractions = additionalExtractions)
+}
+
 
 anonymise <- function(str){
   responseString2 <- gsub(pattern = 1:9 %>% paste(collapse = "|"), replacement = 3, x = str)
