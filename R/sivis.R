@@ -64,7 +64,12 @@ print <- function(x, max = 500){
 #https://acetalent.taleo.net/careersection/ace_external/jobsearch.ftl?lang=en#
 #https://mondelez.avature.net/careers
 #https://www.aetnacareers.com/search-jobs
+#cant get for {microsoft jobs. then select only one - then selet multiple
+
+
 # TODO: DAVID KREISEL _ SCHMALES BUDGET _ RECHTSBEISTAND ONLINE
+
+
 
 ############ todo in get request keys #################
 # https://careers.google.com/jobs/results/?company=Google&company=YouTube&hl=en&jlo=en-US&location=Z%C3%BCrich,%20Switzerland
@@ -263,12 +268,15 @@ create_sivis <- function(cbData){
 }
 
 if(FALSE){
+  #  recursion
   fl <- "httpsjobsdisneycareerscomsearchjobsresultsActiveFacetID0CurrentPage3RecordsPerPage15Distance50RadiusU.RData"
+
+  # lst arr
   fl <- "httpsjobsapigooglemcloudioapijobsearchcallbackjobsCallbackpageSize10offset0companyNamecompanies2Fc3f8.RData"
-
-
   fl <- "httpscareersdupontcomjobsearchajaxcallbacksgetJobsphpcategory5B5Dorganization5B5Dtype5B5Dlocation5B5D.RData"
   fl <- "httpscareersintuitivecomapijobspage2internalfalseuserIdc584a5e0ba114d19b2e225622b9e90e7sessionId773f7.RData"
+
+
   fl <- "httpswwwcapitalonecareerscomsearchjobsresultsActiveFacetID0CurrentPage3RecordsPerPage15Distance50Radi.RData"
   load(file = paste0("R/fromWeb/", fl))
   testRun <- FALSE
@@ -370,7 +378,7 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
     )
     str(jsonStruct)
     jsonStruct$extractPathes$json$isLargeHTML
-    extractPathes <- c(extractPathes, jsonStruct$extractPathes)
+    extractPathes <- jsonStruct$extractPathes
     print(jsonStruct$allFound)
     if(jsonStruct$allFound){
       if(testRun) return(TRUE)
@@ -554,6 +562,11 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
 }
 
 
+
+# f <- JSON_from_String(xx %>% html_text, targetValues)
+# js <- f$jsons %>% fromJSON
+
+
 # For the scheduled scrape i want to extract by index not by targetvalue, since the target values wll change.
 # For the initial scrape i want to extract by target value. The index value i can not know so far.
 JSON_from_String <- function(str, targetValues = NULL, indexNr = NULL){
@@ -716,7 +729,9 @@ findDocType <- function(responseString, targetValues){
   if(length(jsons)){
     # config parameter
     matches <- sapply(targetValues, grepl, fixed = TRUE, x = jsons) %>% as.matrix
-    ScriptJSON <- matches %>% rowSums() %>% {. / length(targetValues)} %>% magrittr::is_greater_than(0.95) %>% which
+    matchRatio <- matches %>% rowSums() %>% {. / length(targetValues)}
+    if(matchRatio < 0.9) warning(paste0("only ", matchRatio, " per cent of targets found in json wrapped in html text."))
+    ScriptJSON <- matchRatio %>% which.max
   }else{
     ScriptJSON <- FALSE
   }
@@ -881,21 +896,18 @@ createDocumentGET <- function(url, cbdata, getRes, extractPathes = NULL){
   sivis$targetKeys <-  list(extractPathes$json$targetKey)
 
   #todo; make better
-  extractType <- extractPathes[1] %>% names %>% toString
-  if(extractType == "scriptJsonIndex"){
-    idx <- extractPathes[[1]]
-    jsonFromString <- TRUE
-  }else{
-    jsonFromString <- NULL
-  }
+  # extractType <- extractPathes[1] %>% names %>% toString
+  # if(extractType == "scriptJsonIndex"){
+  #   idx <- extractPathes[[1]]
+  #   jsonFromString <- TRUE
+  # }else{
+  #   jsonFromString <- NULL
+  # }
 
-  additionalExtractions <- create_Addit_Extract(extractPath = extractPathes)
+  # names(extractPathes)
+  # additionalExtractions <- create_Addit_Extract(extractPath = extractPathes)
 
-  createDocumentGETW(
-    jsonFromString = jsonFromString,
-    additionalExtractions = additionalExtractions,
-    extractPathes = extractPathes
-  )
+  createDocumentGETW(extractPathes = extractPathes)
 }
 
 
@@ -908,10 +920,32 @@ targetKeys <- deparse(sivis$targetKeys, width.cutoff = 500L)
 
 # this covers: text2json, json extraction and early exit for huge html.
 # does not cover: follow-up process of html or only html
-baseGETTemplate <- function(url, base, baseFollow, targetKeys, isLargeHTML = FALSE, jsonFromString = FALSE){
+baseGETTemplate <- function(url, base, baseFollow, targetKeys, extractPathes){
   # todo refactor this
-  if(is.null(isLargeHTML)) isLargeHTML <- FALSE
-  if(is.null(jsonFromString)) jsonFromString <- FALSE
+  # if(is.null(isLargeHTML)) isLargeHTML <- FALSE
+  # if(is.null(jsonFromString)) jsonFromString <- FALSE
+
+  # todo: what if they are multiple extractions. then index differently
+  scriptJsonIndex <- paste0(c(
+    '\tresponse %<>% gregexpr(',
+    '\t\tpattern = "\\\\{(?:[^{}]+|(?R))*?\\\\}",',
+    '\t\tperl = TRUE',
+    '\t) %>%',
+    '\tregmatches(x = response) %>%',
+    '\tunlist %>%',
+    paste0(c('\t.[', extractPathes$scriptJsonIndex,']'), collapse = "")
+  ), collapse = "\n")
+
+  # todo: what if they are multiple extractions. then index differently
+  xpath <- paste0("\tresponse %<>% read_html %>% html_nodes(xpath = '", extractPathes$xpath,"') %>% html_text")
+
+  # todo: what if they are multiple extractions. then index differently
+  json <- '\tresponse <- scheduledGET(response = response, targetKeys = scraper$targetKeys, base = scraper$base, baseFollow = scraper$baseFollow)$res'
+
+  extractionAll <- extractPathes %>%
+    names %>%
+    sapply(FUN = get, USE.NAMES = FALSE) %>%
+    paste(collapse = "\n")
 
   paste0(c(
     'library(DT)',
@@ -927,9 +961,9 @@ baseGETTemplate <- function(url, base, baseFollow, targetKeys, isLargeHTML = FAL
     '\t},',
     paste0('\tbase = ', base,','),
     paste0('\tbaseFollow = ', baseFollow,','),
-    paste0('\ttargetKeys = ', targetKeys, ','),
-    paste0('\tisLargeHTML = ', isLargeHTML, ','),
-    paste0('\tjsonFromString = ', jsonFromString),
+    paste0('\ttargetKeys = ', targetKeys),
+    # paste0('\tisLargeHTML = ', isLargeHTML, ','),
+    # paste0('\tjsonFromString = ', jsonFromString),
     ')',
     '',
     '',
@@ -942,11 +976,15 @@ baseGETTemplate <- function(url, base, baseFollow, targetKeys, isLargeHTML = FAL
     '\tprint(nr)',
     '\turl <- scraper$urlGen(nr)',
     '\t',
-    '\tresponse <- scheduledGET(url = url, targetKeys = scraper$targetKeys, base = scraper$base, baseFollow = scraper$baseFollow, isLargeHTML = scraper$isLargeHTML, jsonFromString = scraper$jsonFromString)$res'),
+    '\tgetRes <- GET(url = url)',
+    '\tif(getRes$status_code != 200) return(NULL)',
+    '\tresponse <- content(getRes, type = "text")',
+    extractionAll
+    ),
     collapse = "\n")
 }
 
-createDocumentGETW <- function(jsonFromString = NULL, additionalExtractions = NULL, extractPathes = NULL){
+createDocumentGETW <- function(extractPathes = extractPathes){
   assign(x = "neighbours", value = unlist(sivis$initGET$neighbours), envir = .GlobalEnv)
 
   fileName <- sivis[["fileName"]]
@@ -973,11 +1011,8 @@ createDocumentGETW <- function(jsonFromString = NULL, additionalExtractions = NU
                       base = base,
                       baseFollow = baseFollow,
                       targetKeys = targetKeys,
-                      isLargeHTML = isLargeHTML,
-                      jsonFromString = jsonFromString
+                      extractPathes = extractPathes
                     ),
-
-                    additionalExtractions,
                     '\toutput[[nr]] <- response',
                     '\tnr <- nr + 1',
                     '',
@@ -2167,7 +2202,7 @@ GetRequest <- function(getRes, browserOutputRaw, extractPathes){
   # todo: could not only be the first one, but one of the previous?
   extractionType <- names(extractPathes[1]) %>% toString
   if(extractionType == "scriptJsonIndex"){
-    idx <- extractPathes[[1]]
+    idx <- extractPathes$scriptJsonIndex
     cont %<>% gregexpr(
       pattern = "\\{(?:[^{}]+|(?R))*?\\}",
       perl = TRUE,
@@ -2291,27 +2326,13 @@ GetRequest <- function(getRes, browserOutputRaw, extractPathes){
 
 ### --> or i make two seperate functions? one for json and one for multiple extractionpathes??
 
-scheduledGET <- function(url, targetKeys, base, baseFollow = NULL, isLargeHTML = FALSE, jsonFromString = NULL){
+scheduledGET <- function(response, targetKeys, base, baseFollow = NULL){
   if(is.null(base)){
     stop("Parameter base, provided to scheduledGET(), is NULL - please provide a valid subset value.")
   }
 
-  getRes <- GET(url = url)
-  if(getRes$status_code != 200) return(NULL)
-  contentGET <- content(getRes, type = "text")
-
-  if(!is.null(jsonFromString)){
-    contentGET %<>% gregexpr(
-      pattern = "\\{(?:[^{}]+|(?R))*?\\}",
-      perl = TRUE
-    ) %>%
-      regmatches(x = contentGET) %>%
-      unlist %>%
-      .[1]
-  }
-
-  contentGET %<>% jsonlite::fromJSON()
-  contentGETFlat <- unlist(contentGET)
+  response %<>% jsonlite::fromJSON()
+  contentGETFlat <- unlist(response)
 
   splitNames <- names(contentGETFlat) %>% strsplit(split = "[.]")
   lastKeys <- sapply(X = splitNames, FUN = tail, n = 1)
@@ -2319,19 +2340,11 @@ scheduledGET <- function(url, targetKeys, base, baseFollow = NULL, isLargeHTML =
   # todo;do i neeed two of these subsetbystr functions?
   if(is.null(base)) base <- NA
   if(any(is.na(base))){
-    baseElems <- contentGET[[1]]
+    baseElems <- response[[1]]
   }else{
-    baseElems <- subsetByStr2(contentGET, base)
+    baseElems <- subsetByStr2(response, base)
   }
 
-  if(isLargeHTML) return(
-    list(
-      res = baseElems,
-      base = base, # what do i need these for?
-      targetKeys = targetKeys # what do i need these for?
-    )
-
-  )
   if(!length(baseElems)) return(NULL)
   targetKey <- targetKeys[[1]]
   texts <- lapply(targetKeys, function(targetKey){
