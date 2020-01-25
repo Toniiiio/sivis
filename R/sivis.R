@@ -70,6 +70,12 @@ print <- function(x, max = 500){
 # TODO: DAVID KREISEL _ SCHMALES BUDGET _ RECHTSBEISTAND ONLINE
 
 
+###todo: but found/match ratio --> "httpswwwpepsicojobscommainjobspage1.RData"
+##--> how to deal with this?
+
+########## seperate requests
+#### one in html one in script
+# https://newscorp.com/careers/search?s=
 
 ############ todo in get request keys #################
 # https://careers.google.com/jobs/results/?company=Google&company=YouTube&hl=en&jlo=en-US&location=Z%C3%BCrich,%20Switzerland
@@ -134,9 +140,13 @@ createScraper <- function(){
   sivis$cbData$request$request$url
 
   cbData <- sivis$cbData
-  create_sivis(cbData)
+  sivis <- create_sivis(cbData)
+  testRun = TRUE
+  success <- use_sivis(sivis, testRun = testRun)
+  success
   testRun = FALSE
   success <- use_sivis(sivis, testRun = testRun)
+
   success
 }
 
@@ -207,6 +217,16 @@ create_sivis <- function(cbData){
         httr::add_headers(.headers = sivis$headers),
         body = body
       )
+
+      # check if i need headers?
+      noHeader <- POST(
+        url = sivis$url,
+        body = body
+      )
+
+      # unsure: will they always be identical? minimum time difference
+      sivis$headerBody <- body
+      sivis$needHeader <- !(identical(sivis$GETContents[[sivis$url]] %>% content, noHeader %>% content))
     }
   }
 
@@ -217,6 +237,14 @@ create_sivis <- function(cbData){
         url = sivis$url,
         httr::add_headers(.headers = sivis$headers)
       )
+
+      # check if i need headers?
+      noHeader <- GET(
+        url = sivis$url
+      )
+
+      # unsure: will they always be identical? minimum time difference
+      sivis$needHeader <- !(identical(sivis$GETContents[[sivis$url]] %>% content, noHeader %>% content))
     }
   }
 
@@ -264,21 +292,46 @@ create_sivis <- function(cbData){
     fileName <- paste0("C:/Users/User1/Documents/mypkg2/R/fromWeb/", substring(text = urlShort, first = 1, last = 101), ".RData")
     print(fileName)
     save(sivis, file = fileName)
+    return(sivis)
   }
 }
 
+# test-test.R:18: warning: httpswwwrbloggerscom.RData works
+# Targetvalues:
+#   "Exploring the tightened EU CO2 emission standards for cars in 2020 – Why now selling an electric car can be worth an extra 18000€ for producers."
+# changed to
+# "Exploring the tightened EU CO2 emission standards for cars in 2020 &#8211; Why now selling an electric car can be worth an extra 18000€ for producers.",
+# because they where not found with a direct match. But only with a fuzzy match using a fuzzy parameter of 0.1.
+# Consider configuring that parameter if that change was inaccurate.
+
 #flhere
 if(FALSE){
-  nr <- 1
-  for(nr in 1:5){
-    fl <- list.files(path = "R/fromWeb/", pattern = ".RData")[2]
-    sivis[["fileName"]] <- paste0("test", nr, ".RData")
+  nr <- 13
+  for(nr in 9:30){
+    ##########works manual but not in testing
+    #fl <- "httpsjobsapiinternalmcloudioapijobcallbackjobsCallbackoffset49sortfieldopen_datesortorderdescendingfa.RData"
+
+    fl <- "httpswwwrbloggerscom.RData"
+
+    ##fl <- "httpspfizerwd1myworkdayjobscomPfizerCareersclientRequestIDe761010b8e564743ad14e7dca67f09e2.RData --> change in subsetbystr
+    #fl <- list.files(path = "R/fromWeb/", pattern = ".RData")[nr]
     load(file = paste0("R/fromWeb/", fl))
-    testRun <- FALSE
-    ff <- use_sivis(sivis, testRun = testRun)
+    assign(x = "fileName", value = paste0("test", nr, ".Rmd"), envir = sivis)
+    #sivis[["fileName"]] <- 1#paste0("test", nr, ".Rmd")
+    testRun <- TRUE
+    ff <- tryCatch(expr = use_sivis(sivis, testRun = testRun), error = function(e) print(e))
     ff
   }
 }
+
+
+#
+# sivis$cbData$request
+# #, encoding = "UTF-8"
+# extract_meta$responseString2 <- getRes %>% content(type = "text/plain")
+#
+# grep(pattern = "&#8211;", x = extract_meta$responseString2)
+# grep(pattern = "-", x = extract_meta$responseString2)
 
 use_sivis <- function(sivis, testRun = TRUE){
   extract_meta <- list()
@@ -301,21 +354,35 @@ use_sivis <- function(sivis, testRun = TRUE){
   # adjusting target values for findable values in response body.
   paramFuzzy <- 0.1
   # todo: targetvalues with "&" a problem?
+  # targetValue <- targetValues[5]
+
+  # alle sonderzeichen: ? - / \
+  # grep("as\asss", pattern = "\\")
+  # changed to
+  # "SAP Basis-Berater (m\/w\/divers)", "Berater (m\/w\/divers)
+  # grep(extract_meta$responseString, pattern = "&amp;", fixed = TRUE)
+  # grep(extract_meta$responseString, pattern = "", fixed = TRUE)
+  responseToText <- gsub(extract_meta$responseString, pattern = "&amp;", replacement = "&", fixed = TRUE)
+  # responseToText <- gsub(responseToText, pattern = "\/", replacement = "/", fixed = TRUE)
+
   newTargetValues <- sapply(targetValues, FUN = function(targetValue){
     aregexec(
       pattern = targetValue,
-      text = extract_meta$responseString,
+      # todo: check if that has a better alternative.
+      text = responseToText,
       max.distance = nchar(targetValue)*paramFuzzy,
       fixed = TRUE
     ) %>%
-      regmatches(x = extract_meta$responseString) %>% unlist
+      regmatches(x = gsub(extract_meta$responseString, pattern = "&amp;", replacement = "&", fixed = TRUE))
   }, USE.NAMES = FALSE)
 
-  excluded <- !(newTargetValues %>% lengths)
+  # in case of encoding errors i get funny output like ????-??. No need for aregex to avoid funny matches like "löschen?"
+  encodErrors <- grepl("^[?-]+$", targetValues)
+  regNotFound <- !(newTargetValues %>% lengths)
 
   #NotMatchAfter <- newTargetValues[!excluded] %>% unlist %>% substr(start = 1, stop = 20)
-  NotMatchBefore <- targetValues[!excluded]
-  NotMatchAfter <- newTargetValues[!excluded] %>% unlist
+  NotMatchBefore <- targetValues[!regNotFound & !encodErrors]
+  NotMatchAfter <- newTargetValues[!regNotFound & !encodErrors] %>% unlist
   fuzzyMatches <- which(unlist(NotMatchAfter) != NotMatchBefore)
   if(length(fuzzyMatches)){
     fuzzyBefore <- NotMatchBefore[fuzzyMatches] %>% paste(collapse = '\", \"') %>% c('"', ., '"') %>% paste(collapse = "")
@@ -328,6 +395,8 @@ use_sivis <- function(sivis, testRun = TRUE){
   # split for text/html, because dont want to differentiate between encoding!?
   contentType <- getRes$headers$`content-type`
   # content type can be NULL? see https://www.accenture.com/de-de/careers/jobsearch?jk=&sb=1
+
+  # could also extract encoding here?? utf-8?
   if(!is.null(contentType)){
     docType <- contentType %>%
       strsplit(split = ";") %>%
@@ -451,6 +520,7 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
   # nest in else if otherwise json with html is extracted and jumped right into html extraction
   # without adjusting the inputs
   }else if(docType == "text/html"){
+    # config parameter
     maxCheck = 5
     htmlResult <- extract_HTML(
       responseString = responseString,
@@ -597,7 +667,7 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
       apply(MARGIN = 1, FUN = min) %>%
       divide_by(lengths)
     allFound <- similarityRatio %>%
-      magrittr::is_less_than(0.05)
+      magrittr::is_less_than(0.1)
   }else{
     allFound <- all(targetValues %in% resultValues)
   }
@@ -605,7 +675,7 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
 
   # todo: What do i want to do if not all values are found
   list(
-    allFound = TRUE,
+    allFound = allFound,
     extractPathes = c(extractPathes, list(xpath = xpath)),
     resultValues = resultValues
   )
@@ -648,6 +718,10 @@ JSON_from_String <- function(str, targetValues = NULL, indexNr = NULL){
 extract_JSON <- function(responseString, targetValues, extractPathes = list()){
   jsonContent <- lapply(responseString,  FUN = jsonlite::fromJSON)
 
+  # config parameter
+  maxValues <- 10
+  targetValues <- targetValues[1:min(length(targetValues), maxValues)]
+
   JSONValues <- allJSONValues(
     jsonContent = jsonContent,
     targetValues = targetValues
@@ -660,10 +734,12 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list()){
   distances <- apply(distMatrix, 1, min, na.rm = TRUE)
 
   # config parameter
+  # todo how do i decide whether everything was found or not??????
   foundRatio <- (distances / nchar(targetValues) < 0.1) %>% {sum(.) / length(.)}
   if(foundRatio < 0.9){
     glue("Only found {foundRatio*100} per cent of target values, while extracting from json.") %>% warning
     allFound <- FALSE
+    if(foundRatio > 0.4) allFound <- TRUE
   }else{
     allFound <- TRUE
   }
@@ -942,7 +1018,7 @@ create_Addit_Extract <- function(extractPathes){
 
 # if sivis data disappear try with assign("url", value = .GlobalEnv[["url"]], envir = sivis)
 createDocumentGET <- function(url, cbdata, getRes, extractPathes = NULL){
-  rstudioapi::documentSave(id = "Notebook_scraping.Rmd")
+  rstudioapi::documentSave(id = "Notebook_scraping.Rmd") # does this work??
 
   #getRes %>% showHtmlPage
   #getRes %>% toString
@@ -976,7 +1052,7 @@ createDocumentGET <- function(url, cbdata, getRes, extractPathes = NULL){
 
 # this covers: text2json, json extraction and early exit for huge html.
 # does not cover: follow-up process of html or only html
-baseGETTemplate <- function(url, base, baseFollow, targetKeys, extractPathes){
+baseGETTemplate <- function(url, base, baseFollow, targetKeys, extractPathes, method, body, headers){
   # todo refactor this
   # if(is.null(isLargeHTML)) isLargeHTML <- FALSE
   # if(is.null(jsonFromString)) jsonFromString <- FALSE
@@ -1000,11 +1076,12 @@ baseGETTemplate <- function(url, base, baseFollow, targetKeys, extractPathes){
   ), collapse = "\n")
 
   # todo: what if they are multiple extractions. then index differently
-
-  # todo: what if they are multiple extractions. then index differently
-  json <- '\tresponse <- scheduledGET(
+  json <- '\tresponse <- scheduledRequest(
   \tresponse = response,
   \ttargetKeys = scraper$targetKeys,
+  \tmethod = scraper$method,
+  \theaders = scraper$headers,
+  \tbody = scraper$body,
   \tbase = scraper$base,
   \tbaseFollow = scraper$baseFollow
   )$res'
@@ -1028,9 +1105,10 @@ baseGETTemplate <- function(url, base, baseFollow, targetKeys, extractPathes){
     '\t},',
     paste0('\tbase = ', base,','),
     paste0('\tbaseFollow = ', baseFollow,','),
-    paste0('\ttargetKeys = ', targetKeys),
-    # paste0('\tisLargeHTML = ', isLargeHTML, ','),
-    # paste0('\tjsonFromString = ', jsonFromString),
+    paste0('\ttargetKeys = ', targetKeys,','),
+    paste0('\tmethod = "', method, '",'),
+    paste0('\tbody = "', body, '",'),
+    paste0('\theaders = ', headers),
     ')',
     '',
     '',
@@ -1043,13 +1121,14 @@ baseGETTemplate <- function(url, base, baseFollow, targetKeys, extractPathes){
     '\tprint(nr)',
     '\turl <- scraper$urlGen(nr)',
     '\t',
-    '\tgetRes <- GET(url = url)',
+    paste0(c('\tgetRes <- ', method,'(url = url, body = scraper$body, add_headers(.headers = scraper$headers))'), collapse = ""),
     '\tif(getRes$status_code != 200) return(NULL)',
     '\tresponse <- content(getRes, type = "text")',
     extractionAll
     ),
     collapse = "\n")
 }
+# getRes <- get(scraper$method)(url = url, body = scraper$body, add_headers(.headers = scraper$headers))
 
 createDocumentGETW <- function(extractPathes = extractPathes){
   assign(x = "neighbours", value = unlist(sivis$initGET$neighbours), envir = .GlobalEnv)
@@ -1060,6 +1139,15 @@ createDocumentGETW <- function(extractPathes = extractPathes){
 
   base <- extractPathes$json$base %>% dput %>% deparse(width.cutoff = 500L)
   baseFollow <- extractPathes$json$baseFollow %>% dput %>% deparse(width.cutoff = 500L)
+  method <- sivis$cbData$request$request$method
+  body <- sivis$headerBody
+  ##%>% deparse(width.cutoff = 500L)
+  safeDeparse <- function(expr){
+    ret <- paste(deparse(expr), collapse="")
+    #rm whitespace
+    gsub("[[:space:]][[:space:]]+", " ", ret)
+  }
+  headers <- ifelse(test = sivis$needHeader, yes = sivis$headers %>% dput %>% safeDeparse(), no = NULL)
 
   isLargeHTML <- extractPathes$json$isLargeHTML
   targetKeys <- deparse(sivis$targetKeys, width.cutoff = 500L)
@@ -1078,7 +1166,10 @@ createDocumentGETW <- function(extractPathes = extractPathes){
                       base = base,
                       baseFollow = baseFollow,
                       targetKeys = targetKeys,
-                      extractPathes = extractPathes
+                      extractPathes = extractPathes,
+                      method = method,
+                      body = body,
+                      headers = headers
                     ),
                     '\toutput[[nr]] <- response',
                     '\tnr <- nr + 1',
@@ -1144,7 +1235,11 @@ createDocument <- function(pageUrl, extractPathes){
     getTemplate <- paste0(c('library(httr)',
         'library(DT)',
         paste0('url <- "', url, '"'),
-        'response <- url %>% GET %>% content(type = "text")'
+        'response <- url %>% GET %>% content(type = "text")',
+        'xpath <- data.frame(',
+        paste(c('\t"', XPathes, '"'), collapse = ""),
+        ')',
+        'response %<>% read_html %>% html_nodes(xpath = as.character(xpath)) %>% html_text()'
       ), collapse = "\n"
     )
     getFinishTemplate <- ""
@@ -1195,10 +1290,6 @@ createDocument <- function(pageUrl, extractPathes){
                      paste0('url <- "', url, '"'),
                      'response <- url %>% GET %>% content(type = "text")',
                      getTemplate,
-                     'xpath <- data.frame(',
-                     paste(c('\t"', XPathes, '"'), collapse = ""),
-                     ')',
-                     'response %<>% read_html %>% html_nodes(xpath = as.character(xpath)) %>% html_text()',
                      getFinishTemplate
     ), collapse = "\n")
 
@@ -1207,10 +1298,10 @@ createDocument <- function(pageUrl, extractPathes){
     rcode <- paste(c('options(stringsAsFactors = FALSE)',
                      'library(xml2)',
                      getTemplate,
-                     paste(c(indent, 'xpath <- data.frame('), collapse = ""),
-                     paste(c(indent, '\t"', XPathes, '"'), collapse = ""),
-                     paste(c(indent, ')'), collapse = ""),
-                     paste(c(indent, 'response %<>% read_html %>% html_nodes(xpath = as.character(xpath)) %>% html_text()'), collapse = ""),
+                     # paste(c(indent, 'xpath <- data.frame('), collapse = ""),
+                     # paste(c(indent, '\t"', XPathes, '"'), collapse = ""),
+                     # paste(c(indent, ')'), collapse = ""),
+                     # paste(c(indent, 'response %<>% read_html %>% html_nodes(xpath = as.character(xpath)) %>% html_text()'), collapse = ""),
                      getFinishTemplate
     ), collapse = "\n")
 
@@ -1704,8 +1795,13 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
       # the other targetStrings.
 
       # refactor better grepl?
-      hasAllChildren <- sapply(allText, grep, x = childrenMatchText, fixed = TRUE) %>%
-        lengths %>% `>`(0) %>% all
+
+      # config parameter
+      percentageFound <- sapply(allText, grep, x = childrenMatchText, fixed = TRUE) %>%
+        lengths %>%
+        {sum(.) / length(.)}
+      hasAllChildren <- percentageFound > 0.7
+
       # hasAllChildren <- sapply(allText, grepl, x = childrenMatchText, fixed = TRUE) %>%
       #   matrix(nrow = length(allText)) %>%
       #   rowSums %>%
@@ -1763,6 +1859,7 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
     tags <- c(tags, tagNameInsert)
     iterTag <- iterTag %>% html_nodes(xpath = "..")
     XPathFound <- !length(iterTag) & XPathFound
+    print(tagName)
   }
 
   #todo: sometimes a tag "text" comes up, that i dont want. However, if i debug nike jobsite
@@ -2054,8 +2151,8 @@ subsetByArray <- function(lst, arr){
   lst
 }
 
-# lstRaw[[1]]$searchResults$job$title
-
+# for  "httpspfizerwd1myworkdayjobscomPfizerCareersclientRequestIDe761010b8e564743ad14e7dca67f09e2.RData"
+#lstRaw[[1]]$body$children$children[[1]]$listItems[[1]]$title$instances[[1]]$text
 subsetByStr <- function(lstRaw, arr, targetValues){
   nrr <- 1
   nr <- 1
@@ -2064,25 +2161,32 @@ subsetByStr <- function(lstRaw, arr, targetValues){
   baseFollow = NULL
   # nr <- 2
   # nr <- 3
-  for(nr in 1:length(unlist(arr$str))){
-    percentFound <- sapply(targetValues, grepl, x = lst, fixed = TRUE) %>% {sum(.) / length(.)}
-    # config parameter
-    IsSingleTarget <- percentFound < 0.1
-    #hasName <- !is.null(names(lst))
-    if(IsSingleTarget){
-      subsetBy <- 1 #arr$iter
-      if(nrr > 1) base <- arr$str[1:(nrr - 1)]
-      baseFollow <- arr$str[nrr:length(arr$str)]
-      break
-    }else{
-      subsetBy <- arr$str[nrr]
-      nrr <- nrr + 1
+  # nr <- 4
+  # nr <- 5
+  if(length(arr$str)){
+    for(nr in 1:length(unlist(arr$str))){
+      print(nr)
+      if(is.null(lst)) stop("extraction in json is wrong have a null list.")
+      percentFound <- sapply(targetValues, grepl, x = lst, fixed = TRUE) %>% {sum(.) / length(.)}
+      # config parameter
+      IsSingleTarget <- percentFound < 0.1
+      #hasName <- !is.null(names(lst))
+      if(IsSingleTarget){
+        subsetBy <- 1 #arr$iter
+        if(nrr > 1) base <- arr$str[1:(nrr - 1)]
+        baseFollow <- arr$str[nrr:length(arr$str)]
+        break
+      }else{
+        subsetBy <- arr$str[nrr]
+        nrr <- nrr + 1
+      }
+      noName <- is.null(names(lst))
+      if(noName) lst <- lst[[1]] # or only for nr == 1 and better filter for singletarget? ?? counterexample "httpspfizerwd1myworkdayjobscomPfizerCareersclientRequestIDe761010b8e564743ad14e7dca67f09e2.RData"
+      lst <- lst[[subsetBy]]
+      if(!is.null(baseFollow) & nrr > 1) lst <- lst[[baseFollow]]
     }
-    noName <- is.null(names(lst))
-    if(nr == 1 & noName) lst <- lst[[1]]
-    lst <- lst[[subsetBy]]
-    if(!is.null(baseFollow) & nrr > 1) lst <- lst[[baseFollow]]
   }
+
   if(is.null(base) & nrr > 1) base <- arr$str
   list(
     base = base,
@@ -2236,18 +2340,20 @@ allJSONValues <- function(jsonContent, targetValues){
 
   # to decide: TradeOff here between direct match and fuzzy match.
   # example: https://pfizer.wd1.myworkdayjobs.com/PfizerCareers. hast key: text and text1, text2, text3, where the latter are not of interest.
-  idx <- which(targetKey == lastKeys)
-  lastKeys[idx]
+  # idx <- which(targetKey == lastKeys)
+  # lastKeys[idx]
   idx <- grepl(pattern = targetKey, x = lastKeys) %>% which
   lastKeys[idx]
   texts <- jsonContentFlat[idx] %>% unname
   texts
   #idx <- c(which(texts == targetValue))
   parentElemNmsRaw <- jsonContentFlat %>% names %>% .[matchIdx[1]] %>% strsplit(split = "[.]") %>% unlist
-  match <- c(parentElemNmsRaw %>% head(n = -1))
+  # match <- parentElemNmsRaw %>% {ifelse(test = length(.) > 1, yes =  head(n = -1), no = .)} %>% c
+  match <- parentElemNmsRaw %>% head(n = -1) %>% c
 
   arr <- list(str = match, iter = matchIdx[1])
   lstRaw = jsonContent
+
   neighbours <- subsetByStr(
     lstRaw = lstRaw, # rename
     arr = arr, # rename
@@ -2409,9 +2515,9 @@ GetRequest <- function(getRes, browserOutputRaw, extractPathes){
 
 ### --> or i make two seperate functions? one for json and one for multiple extractionpathes??
 
-scheduledGET <- function(response, targetKeys, base, baseFollow = NULL){
+scheduledRequest <- function(response, targetKeys, base, baseFollow = NULL, method = "GET", headers = NULL, body = NULL){
   # if(is.null(base)){
-  #   stop("Parameter base, provided to scheduledGET(), is NULL - please provide a valid subset value.")
+  #   stop("Parameter base, provided to scheduledRequest(), is NULL - please provide a valid subset value.")
   # }
 
   response %<>% lapply(FUN = jsonlite::fromJSON)
@@ -2431,6 +2537,17 @@ scheduledGET <- function(response, targetKeys, base, baseFollow = NULL){
   }else{
     baseElems <- lapply(response, FUN = subsetByStr2, arr = base)
   }
+  # config parameter
+  # todo: better refactor here?
+  isLargeHTML <- baseElems %>%
+    stringr::str_count(pattern = "<") %>%
+    is_greater_than(5)
+  if(isLargeHTML) return(
+    list(
+      res = baseElems %>% unlist
+    )
+  )
+
 
   if(!length(baseElems)) return(NULL)
   targetKey <- targetKeys[[1]]
