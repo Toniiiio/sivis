@@ -382,7 +382,11 @@ use_sivis <- function(sivis, testRun = TRUE){
 
   targetValues <- sivis$browserOutput$selectedText %>% gsub(pattern = "\n", replacement = "") %>% trimws
   XPathFromBrowser <- sivis$browserOutput$XPath
-  pageUrl <- sivis$browserOutput$pageUrl
+
+
+  # for additional on https://www.macysjobs.com/search-results? i need the request url, not the page url.
+  # pageUrl <- sivis$browserOutput$pageUrl
+  pageUrl <- sivis$cbData$request$request$url
 
   extract_meta$responseString <- getRes %>% content(type = "text")
   if(!nchar(extract_meta$responseString)) stop("response body from server seems to be empty.")
@@ -464,6 +468,7 @@ use_sivis <- function(sivis, testRun = TRUE){
   while(continue){
     responseString = extract_meta$responseString
     docType = extract_meta$docType
+    docType
     extractPathes = extract_meta$extractPathes
     iterNr = extract_meta$iterNr
 
@@ -1224,12 +1229,8 @@ createDocument <- function(pageUrl, extractPathes){
   OneXPathOnly <- length(XPathes) == 1
   fileName <- sivis[["fileName"]]
   if(is.null(fileName)) fileName <- "Notebook_Scraping.Rmd"
-  XPathes
+  url <- pageUrl
 
-  is.null(extractPathes$json)
-  url <- sivis$browserOutput$pageUrl
-  "url"
-  url
   if(is.null(extractPathes$json)){
     headers <- ifelse(test = sivis$needHeader, yes = sivis$headers %>% dput %>% safeDeparse, no = safeDeparse(""))
 
