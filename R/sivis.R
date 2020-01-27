@@ -1,9 +1,18 @@
+# Anforderungen, Beispiele für Funktionen sammeln.
+# substr321 entsprechend umbenennen umschreiben
+# Automatisches testen für die kreierung von den scrapern bauen.
+
+
 # Notation:
 # Initial scrape: Data collection for building the sivis scraping code.
 # Scheduled scrape: Automatic scrape, that will be done based on the code created by sivis80.
 
 ## General challenges:
 # Mixed sources: First page html, second page xhr request. Example: https://jobs.disneycareers.com/search-jobs
+
+
+###might not fully work
+##peoples united, wrong extraction - can not work - or have to index in neighbour column steht jobtitle, https://sjobs.brassring.com/TGnewUI/Search/Home/Home?partnerid=25679&siteid=5313#keyWordSearch=&locationSearch=
 
 
 # todo: inpage source reparieren und von get und post untersuchungen trennen: {"identifier":"SivisCBDataIdent","pageUrl":"https://jobs.fastretailing.com/search/?q=&sortColumn=referencedate&sortDirection=desc&startrow=50","clickType":"contextmenu","selectedText":["\n            Mcclean, VA, US\n            \n        "],"links":[null],"XPath":"/html/body/div[2]/div[2]/div/div[4]/table/tbody/tr[1]/td[3]/span","XPathClassRaw":"/html[class = 'html5']/body[class = 'coreCSB search-page body']/div[class = 'outerShell']/div[class = 'innerShell']/div[class = 'content']/div[class = 'searchResultsShell']/table[class = 'searchResults full']/tbody/tr[class = 'dbOutputRow2 jobgrid-row']/td[class = 'colLocation']/span[class = 'jobLocation']","getUrl":"https://jobs.fastretailing.com/search/?q=&sortColumn=referencedate&sortDirection=desc&startrow=50","postUrl":"","postBody":{"raw":"[object Object]"},"InPageSource":true}
@@ -43,6 +52,7 @@ print <- function(x, max = 500){
 # gets document if try to select all - https://www.pmi.com/careers/explore-our-job-opportunities?title=&locations=
 # https://careers.blackrock.com/job-search-results #### cant select all data
 # https://jobs.cvshealth.com/ListJobs?prefilters=none&CloudSearchLocation=none
+# cant get data also with 10+ tries: https://jobs.harley-davidson.com/search/?createNewAlert=false&q=&locationsearch=
 
 
 ##### right click opens new window, but without ctrl it works:
@@ -82,6 +92,15 @@ print <- function(x, max = 500){
 
 
 # TODO: DAVID KREISEL _ SCHMALES BUDGET _ RECHTSBEISTAND ONLINE
+
+
+# encoding issues:
+### httpswwwroberthalfcomworkwithuscareersatroberthalfinternaljobsalljobsalllocationsalltypesroberthalfca.RData
+
+# still c stack errors:
+### httpswwwroberthalfcomworkwithuscareersatroberthalfinternaljobsalljobsalllocationsalltypesroberthalfca.RData
+
+# double extract_json --> means i need multiple targetkeys?
 
 
 ###todo: but found/match ratio --> "httpswwwpepsicojobscommainjobspage1.RData"
@@ -241,16 +260,19 @@ create_sivis <- function(cbData){
       )
       sivis$GETContents[[sivis$url]]
       withHeaders <- sivis$GETContents[[sivis$url]]
-      if(withHeaders$status_code != 200) warning("status code is not 200 for get request with headers")
+      withHeaderFailed <- withHeaders$status_code != 200
 
       # check if i need headers?
       noHeader <- GET(
         url = sivis$url
       )
 
+
+      if(withHeaderFailed) warning("status code is not 200 for get request with headers")
       # todo: make better. funny exception that it works without headers only for https://www.zeit.de/index.
-      onlyNoHeaderSuccess <- withHeaders$status_code != 200 & noHeader$status_code == 200
+      onlyNoHeaderSuccess <- withHeaderFailed & noHeader$status_code == 200
       if(onlyNoHeaderSuccess){
+        message("but it works without headers,...")
         sivis$GETContents[[sivis$url]] <- noHeader
         sivis$needHeader <- FALSE
       }else{
@@ -342,10 +364,14 @@ if(FALSE){
   }
 }
 
+# httpsmastercardjobsjobs.RData
+# httpscareershrtechnipfmccomlatestjobs.RData
+# httpsmastercardjobsjobs#3.RData
+# httpsjobsapiinternalmcloudioapijobcallbackjobsCallbackoffset49sortfieldopen_datesortorderdescendingfa.RData
+
 ## fromChrome from chrome new scraper newscraper
 createScraper <- function(){
   sivis$cbData <- readClipboard() %>% fromJSON
-  sivis$cbData$request$`_fromCache`
   sivis$cbData
   sivis$cbData$request$request$url
 
@@ -403,7 +429,8 @@ use_sivis <- function(sivis, testRun = TRUE){
   # "SAP Basis-Berater (m\/w\/divers)", "Berater (m\/w\/divers)
   # grep(extract_meta$responseString, pattern = "&amp;", fixed = TRUE)
   # grep(extract_meta$responseString, pattern = "", fixed = TRUE)
-  responseToText <- gsub(extract_meta$responseString, pattern = "&amp;", replacement = "&", fixed = TRUE)
+  # responseToText <- gsub(extract_meta$responseString, pattern = "&amp;", replacement = "&", fixed = TRUE)
+
   responseToText <- unescape_html2(extract_meta$responseString)
   # responseToText <- gsub(responseToText, pattern = "\/", replacement = "/", fixed = TRUE)
 
@@ -415,7 +442,7 @@ use_sivis <- function(sivis, testRun = TRUE){
       max.distance = nchar(targetValue)*paramFuzzy,
       fixed = TRUE
     ) %>%
-      regmatches(x = gsub(responseToText, pattern = "&amp;", replacement = "&", fixed = TRUE))
+      regmatches(x = responseToText)
   }, USE.NAMES = FALSE)
 
   # in case of encoding errors i get funny output like ????-??. No need for aregex to avoid funny matches like "löschen?"
@@ -484,6 +511,7 @@ use_sivis <- function(sivis, testRun = TRUE){
       iterNr = iterNr
     )
     continue <- !extract_meta$allFound
+    continue
   }
   return(TRUE)
 }
@@ -742,12 +770,20 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list()){
   # config parameter
   # todo how do i decide whether everything was found or not??????
   foundRatio <- (distances / nchar(targetValues) < 0.1) %>% {sum(.) / length(.)}
-  if(foundRatio < 0.9){
-    glue("Only found {foundRatio*100} per cent of target values, while extracting from json.") %>% warning
+
+  # check if it is another json: example: httpswwwroberthalfcomworkwithuscareersatroberthalfinternaljobsalljobsalllocationsalltypesroberthalfca.RData
+  isJSON <- jsonlite:::validate(JSONValues$texts)
+
+  if(isJSON){
     allFound <- FALSE
-    if(foundRatio > 0.4) allFound <- TRUE
   }else{
-    allFound <- TRUE
+    if(foundRatio < 0.9){
+      glue("Only found {foundRatio*100} per cent of target values, while extracting from json.") %>% warning
+      allFound <- FALSE
+      if(foundRatio > 0.4) allFound <- TRUE
+    }else{
+      allFound <- TRUE
+    }
   }
 
   hasNAs <- JSONValues$texts %>% is.na %>% any
@@ -2118,20 +2154,67 @@ subsetByStr2 <- function(lstRaw, arr){
 }
 
 # arr = targetKey
+
+# https://flir.wd1.myworkdayjobs.com/flircareers/jobs
+#https://mosaic.wd5.myworkdayjobs.com/mosaic
+#[[49]]
+# id  widget                                text action    v
+# 1 20846215 moniker Production Supervisor - Granulation    GET TRUE
+#
+# [[50]]
+# id  widget                              text action    v
+# 1 20846224 moniker Production Supervisor - Phos Acid    GET TRUE
+
+## --> try: sapply(lstRaw, "[", arr, USE.NAMES = FALSE) %>% unname %>% unlist
+
+
+##### https://careers.invesco.com/ListJobs
+##key: JobTitleRegex
+
+# JobTitle      ShortTextField1
+# 1 Specialist, RTR Finance & Accounting
+
+#####lstRaw$JobTitle
+
+
+# JobTitle                 Location
+# 1       Apartment Maintenance Technician
+
+
 subsetByStr3 <- function(lstRaw, arr){
-  # if(is.null(names(lstRaw))) lstRaw <- unlist(lstRaw)
+  #
+  if(typeof(lstRaw) == "list" & !is.data.frame(lstRaw)){
+    lstRaw <- do.call(rbind, lstRaw) # for workadays: https://flir.wd1.myworkdayjobs.com/flircareers/jobs
+  }
+  #if(is.null(names(lstRaw))) lstRaw <- unlist(lstRaw)
   # allow for regex here:
-  arr <- sapply(arr, grep, x = names(lstRaw)) %>% unlist %>% names(lstRaw)[.] %>% unique
+  #arr <- "text"
+
+  # there can be multple matches like for https://aimcojobs.com/ListJobs?. But why do i do this anyway? why dont take regex
+  # directly, because i cant subset that way,  but can i later?? or subset with regex?
+  arrs <- sapply(arr, grep, x = names(lstRaw)) %>% unlist %>% names(lstRaw)[.]
+
+  # transformation fails: https://sjobs.brassring.com/TGnewUI/Search/Home/Home?partnerid=25679&siteid=5313#keyWordSearch=&locationSearch=
+  if(!length(arrs)){
+    warning("transformation of target keys failed.")
+    arr %<>% adist(names(lstRaw)) %>% which.min %>% names(lstRaw)[.]
+  }else{
+    arr <- arrs %>% adist(arr) %>% which.min %>% arrs[.] #unique
+  }
+
   if(is.null(arr)) stop("Do not find correct targetKeys for targetValues in json.")
   lst <- lstRaw
   nr <- 1
   #if(typeof(lst) == "list") lst <- do.call(rbind, lst)
-  for(nr in 1:length(arr)){
-    lst <-  lst[[arr[nr]]]
-    if(!length(lst)) return("") # missing element return empty string
-    #if(is.null(names(lst))) lst <- lst[[1]] # todo: what do i need this for: counterexample: "httpscareerbelufthansacomglobaljobboard_apisearchdata7B22LanguageCode223A22DE222C22SearchParameters2 (2).RData"
-  }
-  lst
+
+  lst[[arr]]
+  # cant there be multiple arr?? actualy no right? why this loop then?
+  # for(nr in 1:length(arr)){
+  #   lst <-  lst[[arr[nr]]]
+  #   if(!length(lst)) return("") # missing element return empty string
+  #   #if(is.null(names(lst))) lst <- lst[[1]] # todo: what do i need this for: counterexample: "httpscareerbelufthansacomglobaljobboard_apisearchdata7B22LanguageCode223A22DE222C22SearchParameters2 (2).RData"
+  # }
+  # lst
 }
 
 
@@ -2201,11 +2284,19 @@ allJSONValues <- function(jsonContent, targetValues){
     )
   }
 
+  #
   targetKeys <- lastKeys[matchIdx %>% as.numeric()]
-  targetKey <- targetKeys %>%
-    table %>%
-    which.max %>%
-    names
+  targetKeyCount <- targetKeys %>% table
+
+  # example for multipleMax on httpswwwroberthalfcomworkwithuscareersatroberthalfinternaljobsalljobsalllocationsalltypesroberthalfca.RData
+  multipleMax <- (targetKeyCount == max(targetKeyCount)) %>% sum %>% magrittr::is_greater_than(1)
+  if(multipleMax){
+    # or go directly on regex targetkey? but how to handle double targetkeyslim below again?
+    targetKey <- gsub(x = targetKeys, pattern = "[0-9]", replacement = "") %>% table %>% which.max %>% targetKeys[.]
+  }else{
+    targetKey <- targetKeyCount %>% which.max %>% names
+  }
+
   texts <- jsonContentFlat[lastKeys %in% targetKey] %>% unname
 
   # todo: how do i know if i have an html below or close match
@@ -2236,7 +2327,7 @@ allJSONValues <- function(jsonContent, targetValues){
   }
 
   if(length(texts) < length(targetValues)){
-    targetKeysSlim <- gsub(x = targetKeys, pattern = "[0-9]*", replacement = "") %>% unique
+    targetKeysSlim <- gsub(x = targetKeys, pattern = "[0-9]*", replacement = "") %>% table %>% which.max %>% names
     numbers <- gsub(pattern = targetKeysSlim, replacement = "", x = targetKeys) %>% as.numeric
     seqNumber <- numbers %>% sort %>% diff %>% table %>% which.max %>% names %>% as.numeric
     if(!length(seqNumber)){
@@ -2443,6 +2534,7 @@ scheduledRequest <- function(response, targetKeys, base, baseFollow = NULL, meth
   splitNames <- names(contentGETFlat) %>% strsplit(split = "[.]")
   lastKeys <- sapply(X = splitNames, FUN = tail, n = 1)
 
+  base
   # todo;do i neeed two of these subsetbystr functions?
   if(is.null(base)) base <- NA
   if(any(is.na(base))){
@@ -2462,7 +2554,8 @@ scheduledRequest <- function(response, targetKeys, base, baseFollow = NULL, meth
     stringr::str_count(pattern = "<") %>%
     is_greater_than(5)
 
-  if(isLargeHTML) return(
+  # example for islargehtml false alarm: https://www.cfindustries.com/careers/list.html
+  if(isLargeHTML & baseElems %>% unlist %>% length %>%  magrittr::equals(1)) return(
     list(
       res = baseElems %>% unlist
     )
@@ -2485,6 +2578,7 @@ scheduledRequest <- function(response, targetKeys, base, baseFollow = NULL, meth
     df <- setNames(df, paste(targetKey, collapse = "|"))
     df
   })
+
 
   res <- do.call(what = cbind, texts)
   colnames(res) <- targetKeys
