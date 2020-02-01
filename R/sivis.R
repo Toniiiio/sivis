@@ -564,7 +564,10 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
   iterNr = iterNr + 1
   if(iterNr > 6) stop("Too many iterations. Want to avoid getting caught in an infinite loop.")
 
-  if(is.null(docType)) docType <- findDocType(responseString = responseString, targetValues = targetValues)
+  if(is.null(docType)){
+    docTypeInfo <- findDocType(responseString = responseString, targetValues = targetValues)
+    docType <- docTypeInfo$type
+  }
 
   if(docType == "application/vnd.oracle.adf.resourcecollection+json") docType <- "application/json"
   if(docType != "application/json" & grepl(pattern = "application", x = docType) & grepl(pattern = "json", x = docType)){
@@ -584,10 +587,13 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
     str <- responseString
     jsonExtractor <- JSON_from_String(
       str = str,
-      targetValues = targetValues
+      regexStr = docTypeInfo$jsonRegex,
+      reqSingleQuote = docTypeInfo$reqSingleQuote,
+      indexNr = docTypeInfo$JSONIdx,
+      targetValues = NULL
     )
     responseString <- jsonExtractor$jsons
-    extractPathes <- c(extractPathes, list(scriptJsonIndex = jsonExtractor$index))
+    extractPathes <- c(extractPathes, docTypeInfo)
 
     # have extracted a JSON now, can move on as if i would have gotten a JSON from the server.
     # The necessary extraction step is saved in variable above: extractPathes.
@@ -793,34 +799,75 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
 
 # For the scheduled scrape i want to extract by index not by targetvalue, since the target values wll change.
 # For the initial scrape i want to extract by target value. The index value i can not know so far.
-JSON_from_String <- function(str, targetValues = NULL, indexNr = NULL){
+JSON_from_String <- function(str, regexStr = "\\{(?:[^{}]+|(?R))*?\\}", reqSingleQuote = FALSE, targetValues = NULL, indexNr = NULL){
   # httpsjobsapigooglemcloudioapijobsearchcallbackjobsCallbackpageSize10offset0companyNamecompanies2Fc3f8
   #### recursion limit reached in PCRE for element 1
 
   allJSONS <- gregexpr(
-    pattern = "\\{(?:[^{}]+|(?R))*?\\}",
+    pattern = regexStr,
     perl = TRUE,
     text = str
   ) %>%
     regmatches(x = str) %>%
     unlist
+
   if(!length(allJSONS)) stop("Expected a JSON, but did not find one.")
 
   if(!is.null(targetValues)){
-    allJSONS %>%
+    jsons <- allJSONS %>%
       data.frame(jsons = ., match = grepl(pattern = paste(targetValues, collapse = "|"), x = .), index = 1:length(.)) %>%
-      dplyr::filter(match == TRUE) %>% return
+      dplyr::filter(match == TRUE)
   }else if(!is.null(indexNr)){
-    allJSONS %>%
+    jsons <- allJSONS %<>%
       data.frame(jsons = ., index = 1:length(.)) %>%
-      dplyr::filter(index == indexNr) %$% jsons %>%  return
+      dplyr::filter(index == indexNr) %$% jsons
   }else{
     stop("Please specify either the targetValues or the indexNr parameter.")
   }
+
+  if(reqSingleQuote){
+    jsons <- gsub(
+      x = jsons,
+      pattern = "'",
+      replacement = '"'
+    )
+  }
+
+  return(
+    list(jsons = jsons)
+  )
+
 }
 
 extract_JSON <- function(responseString, targetValues, extractPathes = list()){
   jsonContent <- lapply(responseString,  FUN = jsonlite::fromJSON)
+
+  # handle json arrays (wihout names)
+  if(jsonContent %>% unlist %>% names %>% is.null){
+    # todo: treshold definieren, wann es einen pattern gibt.
+    rr <- sapply(targetValues, FUN = "==", jsonContent[[1]])
+    rrr <- apply(rr, 2, which)
+    rrrr <- apply(rrr, 1, diff)
+    by <- rrrr %>% table %>% which.max %>% names %>% as.integer
+    start <- min(rrr[1, ])
+    end <- max(rrr[1, ])
+    print("subsetByInteger")
+    print(subsetByInteger)
+
+    idx <- seq.int(from = start, to = end, by = by)
+    resultValues <- jsonContent[[1]][idx]
+
+    # config parameter
+    allFound <- targetValues %in% resultValues %>% {sum(.) / length(.)} %>% magrittr::is_greater_than(0.7)
+
+    list(
+      type = "jsonArray",
+      start = start,
+      by = by,
+      end = end
+    )
+    stop("json arrays (without names) are currently not supported, working on it.")
+  }
 
   # config parameter
   maxValues <- 10
@@ -962,44 +1009,41 @@ findDocType <- function(responseString, targetValues){
     error = function(e) return(FALSE)
   )
 
-  jsons <- gregexpr(
-    pattern = "\\{(?:[^{}]|(?R))*\\}",
-    text = responseString,
-    perl = T
+  regexs <- c("\\{(?:[^{}]|(?R))*\\}", "\\[.*?\\]")
+  jsonRegex <- regexs[2]
+  ScriptJSON <- sapply(
+    X = regexs,
+    FUN = checkForJSON,
+    targetValues = targetValues,
+    responseString = responseString
   ) %>%
-  regmatches(x = responseString) %>%
-  unlist
+    t %>%
+    data.frame %>%
+    dplyr::filter(isMatch == TRUE)
 
-  if(length(jsons)){
-    # config parameter
-    matches <- sapply(targetValues, grepl, fixed = TRUE, x = jsons) %>% as.matrix
-    matchRatio <- matches %>% rowSums() %>% {. / length(targetValues)}
-    if(matchRatio < 0.9) warning(paste0("only ", matchRatio, " per cent of targets found in json wrapped in html text."))
-    ScriptJSON <- matchRatio %>% which.max
-  }else{
-    ScriptJSON <- FALSE
-  }
+  if(nrow(ScriptJSON) > 1) ScriptJSON  %<>% dplyr::filter(row_number() == 1)
+
 
   #### todo: refactor this shit
   if(isJSON){
-    return("application/json")
+    return(list(type = "application/json"))
   }else if(isHTML){
-    if(ScriptJSON){
+    if(identical(TRUE, ScriptJSON$isMatch)){
       hasScriptTag <- responseString %>%
         xml2::read_html() %>%
         html_nodes(xpath = "/script") %>%
         length
       if(hasScriptTag){
-        return("text/html")
+        return(list(type = "text/html"))
       }else{
         return("script/json")
       }
     }
-    return("text/html")
-  }else if(ScriptJSON){
-    return("script/json")
+    return(list(type = "text/html"))
+  }else if(ScriptJSON$isMatch){
+    return(ScriptJSON)
   }else{
-    return("unknown type")
+    return(list(type = "unknown type"))
   }
 }
 
@@ -1012,16 +1056,6 @@ checkForJSON <- function(jsonRegex, responseString, targetValues, reqSingleQuote
     regmatches(x = responseString) %>%
     unlist
 
-
-  # todo: modify in case only one of jsons uses single quotes
-  isJSON <- sapply(jsons, FUN = jsonlite::validate, USE.NAMES = FALSE) %>% {all(.) & length(.)}
-  if(!isJSON & jsons %>% length){
-    jsons <- jsons %>% gsub(pattern = "'", replacement = '"')
-    isJSON <- jsons %>% sapply(FUN = jsonlite::validate, USE.NAMES = FALSE) %>% all
-    reqSingleQuote <- isJSON
-    if(!isJSON) ScriptJSON <- FALSE
-  }
-
   # now check for occurence of target values
   if(length(jsons)){
     # config parameter
@@ -1029,14 +1063,27 @@ checkForJSON <- function(jsonRegex, responseString, targetValues, reqSingleQuote
     matchRatio <- matches %>% rowSums() %>% {. / length(targetValues)}
     #if(matchRatio < 0.9) warning(paste0("only ", matchRatio, " per cent of targets found in json wrapped in html text."))
     JSONIdx <- matchRatio %>% which.max
-    ScriptJSON <- TRUE
+    isMatch <- TRUE
   }else{
-    ScriptJSON <- FALSE
+    isMatch <- FALSE
     JSONIdx <- 0
   }
+
+  if(isMatch){
+    # todo: modify in case only one of jsons uses single quotes
+    isJSON <- jsonlite::validate(jsons[JSONIdx])
+    if(!isJSON & jsons %>% length){
+      jsons <- jsons %>% gsub(pattern = "'", replacement = '"')
+      isJSON <- jsonlite::validate(jsons[JSONIdx])
+      reqSingleQuote <- isJSON
+      if(!isJSON) ScriptJSON <- FALSE
+    }
+  }
+
   return(
-    list(
-      ScriptJSON = ScriptJSON,
+    c(
+      type = "script/json",
+      isMatch = isMatch,
       jsonRegex = jsonRegex,
       JSONIdx = JSONIdx,
       reqSingleQuote = reqSingleQuote
