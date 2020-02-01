@@ -1282,7 +1282,11 @@ baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys, extractPathes
 
   hdr <- switch(is.null(headers) + 1, paste0(', add_headers(.headers = scraper$headers)'), "")
   bdy <- switch(is.null(body) + 1, paste0(', body = scraper$body'), "")
-  scrBdy <- switch(is.null(body) + 1, paste0(',\n\tbody = "', body, '",'), "")
+  # https://www.nisource.com/careers/job-search benötigt double quotes im body
+  bdyQuote <- ifelse(test = grepl(x = body, pattern = '"'), yes = "'", no = '"')
+  # bodyQuote <-
+
+  scrBdy <- switch(is.null(body) + 1, paste0(',\n\tbody = ', bdyQuote, body, bdyQuote), "")
   scrHdr <- switch(is.null(headers) + 1, paste0(',\n\theaders = ', headers), "")
 
   # create code from extractPathes by using coding templates.
@@ -2561,6 +2565,7 @@ allJSONValues <- function(jsonContent, targetValues){
   list(
     targetKey = targetKey,
     texts = texts,
+    isLargeHTML = isLargeHTML,
     neighbours = neighbours$lst[[1]],
     base = neighbours$base,
     baseFollow = neighbours$baseFollow
