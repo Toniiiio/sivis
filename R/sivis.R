@@ -358,9 +358,11 @@ create_sivis <- function(cbData){
 # Consider configuring that parameter if that change was inaccurate.
 
 #flhere
+####testqqq
 if(FALSE){
   nr <- 3
   for(nr in 1:5){
+
     ##########works manual but not in testing
     #fl <- "httpsjobsapiinternalmcloudioapijobcallbackjobsCallbackoffset49sortfieldopen_datesortorderdescendingfa.RData"
 
@@ -368,7 +370,10 @@ if(FALSE){
     #fl <- "httpshiremyaviontecomsonarv2jobBoardQ16L3ooLDFQW1VE2wFUOsQ.RData" # individual baseFollow names
     #fl <- "httpswwwpmicomapiJobFilterWidgetApiSearchContenttitlecontractlocationsdepartmentpage0itemsPerPage6.RData" <simpleError in !extract_meta[["allFound"]]: invalid argument type>
 
-    fl <- "httpscareersmicrosoftcomusensearchresults.RData"
+    fl <- "x_r_j_httpscareersactivisioncomsearchresults.RData"
+    fl <- "httpscareerskohlscomsearchresults.RData"
+    fl <- "httpsdeccepjobssearchjobsresultsActiveFacetID0CurrentPage2RecordsPerPage14Distance50RadiusUnitType0Ke.RData"
+    fl <- "httpsdeccepjobssearchjobsresultsActiveFacetID0CurrentPage2RecordsPerPage14Distance50RadiusUnitType0Ke.RData"
     #fl <- "httpscareersintuitivecomapijobspage2internalfalseuserIdc584a5e0ba114d19b2e225622b9e90e7sessionId773f7.RData"
     load(file = paste0("R/fromWeb/", fl))
     if(sivis$needHeader %>% is.null) sivis$needHeader <- FALSE
@@ -376,7 +381,7 @@ if(FALSE){
 
     assign(x = "fileName", value = paste0("test", nr, ".Rmd"), envir = sivis)
     #sivis[["fileName"]] <- 1#paste0("test", nr, ".Rmd")
-    testRun <- TRUE
+    testRun <- FALSE
     testEval <- FALSE
     ff <- tryCatch(expr = use_sivis(sivis, testRun = testRun, testEval = testEval), error = function(e) print(e))
     ff
@@ -499,6 +504,11 @@ use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE){
     docType <- NULL
   }
 
+  # check if json is within string.
+  resourceType <- sivis$cbData$request$`_resourceType`
+  if(is.null(resourceType)) resourceType  <- ""
+  if(resourceType == "script" & docType == "application/json") docType <- "script/json"
+
   #docType <- findDocType(responseString)
 
   # a function that
@@ -564,8 +574,12 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
   iterNr = iterNr + 1
   if(iterNr > 6) stop("Too many iterations. Want to avoid getting caught in an infinite loop.")
 
-  if(is.null(docType)){
-    docTypeInfo <- findDocType(responseString = responseString, targetValues = targetValues)
+  getAddTextJSONInfo <- identical(docType, "script/json")
+  if(is.null(docType) | getAddTextJSONInfo){
+    docTypeInfo <- findDocType(
+      responseString = responseString,
+      targetValues = targetValues
+    )
     docType <- docTypeInfo$type
   }
 
@@ -575,25 +589,27 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
     docType <- "application/json"
   }
 
-  if(not(docType %in% c("text/html", "application/json", "script/json"))){
+  if(magrittr::not(docType %in% c("text/html", "application/json", "script/json"))){
     stop(glue("For docType: {docType} there is no extraction method, yet. Please file an issue."))
   }
 
-  resourceType <- sivis$cbData$request$`_resourceType`
   docType
-  resourceType
-  if(is.null(resourceType)) resourceType  <- ""
-  if(docType == "script/json" | resourceType == "script" & docType == "application/json"){
+  if(docType == "script/json"){
     str <- responseString
+    regexStr = docTypeInfo$jsonRegex
+    reqSingleQuote = docTypeInfo$reqSingleQuote
+    indexNr = docTypeInfo$JSONIdx
+
     jsonExtractor <- JSON_from_String(
       str = str,
-      regexStr = docTypeInfo$jsonRegex,
-      reqSingleQuote = docTypeInfo$reqSingleQuote,
-      indexNr = docTypeInfo$JSONIdx,
-      targetValues = NULL
+      regexStr = regexStr,
+      reqSingleQuote = reqSingleQuote,
+      indexNr = indexNr,
+      targetValues = targetValues
     )
-    responseString <- jsonExtractor$jsons
-    extractPathes <- c(extractPathes, docTypeInfo)
+    responseString <- jsonExtractor$jsons$jsons
+    extractPathes[[length(extractPathes) + 1]] <- list(docTypeInfo)
+    names(extractPathes)[length(extractPathes)] <- "scriptJsonIndex"
 
     # have extracted a JSON now, can move on as if i would have gotten a JSON from the server.
     # The necessary extraction step is saved in variable above: extractPathes.
@@ -606,7 +622,9 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
       targetValues = targetValues,
       extractPathes = extractPathes
     )
-    extractPathes <- jsonStruct$extractPathes
+    extractPathes[[length(extractPathes) + 1]] <- list(jsonStruct$extractPathes)
+    names(extractPathes)[length(extractPathes)] <- "json"
+
     jsonStruct$allFound
     if(jsonStruct$allFound){
       if(testRun & !testEval){
@@ -673,8 +691,9 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
         )
       }
       # have to set xpath to environ/global variable, so that later on xpathes can be added
-      XPathes <- htmlResult$extractPathes$xpath
-      extractPathes = htmlResult$extractPathes
+      XPathes <- htmlResult$extractPathes
+      extractPathes[[length(extractPathes) + 1]] <- list(htmlResult$extractPathes)
+      names(extractPathes)[length(extractPathes)] <- "xpath"
       getRes = NULL
 
       testEval <- createDocument(
@@ -779,14 +798,13 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
     targetValues = targetValues
   )
   if(docType == "unknown type"){
-    warning("docType is of type unknown.")
     allFound <- TRUE
   }
 
   # todo: What do i want to do if not all values are found
   list(
     allFound = allFound,
-    extractPathes = c(extractPathes, list(xpath = xpath)),
+    extractPathes = xpath,
     resultValues = resultValues
   )
 }
@@ -843,7 +861,8 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list()){
   jsonContent <- lapply(responseString,  FUN = jsonlite::fromJSON)
 
   # handle json arrays (wihout names)
-  if(jsonContent %>% unlist %>% names %>% is.null){
+  isJSONArray <- jsonContent %>% unlist %>% names %>% is.null
+  if(isJSONArray){
     # todo: treshold definieren, wann es einen pattern gibt.
     rr <- sapply(targetValues, FUN = "==", jsonContent[[1]])
     rrr <- apply(rr, 2, which)
@@ -893,8 +912,25 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list()){
     # check if it is another json: example: httpswwwroberthalfcomworkwithuscareersatroberthalfinternaljobsalljobsalllocationsalltypesroberthalfca.RData
   }
 
+  jsonToExtract <- list(
+    reponse = "json",
+    isLargeHTML = JSONValues$isLargeHTML,
+    neighbours = JSONValues$neighbours,
+    texts = JSONValues$texts,
+    targetKey = JSONValues$targetKey,
+    base = JSONValues$base,
+    baseFollow = JSONValues$baseFollow
+  )
+
+
   if(isJSON | JSONValues$isLargeHTML){
-    allFound <- FALSE
+    return(
+      list(
+        allFound = FALSE,
+        extractPathes = c(extractPathes, list(json = jsonToExtract)),
+        resultValues = JSONValues$texts
+      )
+    )
   }else{
     if(foundRatio < 0.9){
       glue("Only found {foundRatio*100} per cent of target values, while extracting from json.") %>% warning
@@ -906,23 +942,12 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list()){
   }
 
   hasNAs <- JSONValues$texts %>% is.na %>% any
-  if(allFound & hasNAs) warning("All target values found, but extraction of JSON values yields additional NAs")
-  if(hasNAs) warning("Extraction of JSON values yields NAs")
+  if(allFound & hasNAs) message("All target values found, but extraction of JSON values yields additional NAs")
+  if(hasNAs) message("Extraction of JSON values yields NAs")
 
   if(length(resultValues) > length(targetValues)){
     message("Found more values than expected!")
   }
-
-
-  jsonToExtract <- list(
-    reponse = "json",
-    isLargeHTML = JSONValues$isLargeHTML,
-    neighbours = JSONValues$neighbours,
-    texts = JSONValues$texts,
-    targetKey = JSONValues$targetKey,
-    base = JSONValues$base,
-    baseFollow = JSONValues$baseFollow
-  )
 
   return(
     list(
@@ -997,38 +1022,69 @@ addXPath <- function(){
 # ---> if html and html, then html has to have a script tag
 
 # complete list of meme types: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Complete_list_of_MIME_types
+
+test_html <- function(responseString){
+  doc <- responseString %>%
+    xml2::read_html()
+
+  isList <- doc %>%
+    typeof %>%
+    magrittr::equals("list")
+
+  # get false alarm for html if its text json instead, check if i find the tags
+  tags <- doc %>%
+    html_nodes(xpath = "//*") %>%
+    html_name %>%
+    unique %>%
+    setdiff(y = c("html", "body"))
+
+  # todo: make better
+  # cant check for html and body, in case it is a html from a json, see: "httpscareersunderarmourcomsearchjobsresultsActiveFacetID0CurrentPage2RecordsPerPage10Distance50Radius.RData"
+  # cant check for setdiff(tags, html/body), see XXXX am 01.02
+  foundTags <- tags %>%
+    sapply(FUN = grep, x = responseString) %>%
+    lengths %>%
+    all
+
+  if(isList & foundTags & length(tags) == 1) stop ("HEEEEEEEEEREEE")
+  htmlFound <- isList & foundTags & length(tags) > 1
+  return(htmlFound)
+}
+
+# a lot todo
 findDocType <- function(responseString, targetValues){
 
   isJSON <- jsonlite:::validate(responseString)
+  isJSON
 
   isHTML <- tryCatch(
-    expr = responseString %>%
-      xml2::read_html() %>%
-      typeof %>%
-      magrittr::equals("list"),
+    expr = test_html(responseString = responseString),
     error = function(e) return(FALSE)
   )
+  isHTML
 
   regexs <- c("\\{(?:[^{}]|(?R))*\\}", "\\[.*?\\]")
   jsonRegex <- regexs[2]
-  ScriptJSON <- sapply(
+  ScriptJSON <- lapply(
     X = regexs,
     FUN = checkForJSON,
     targetValues = targetValues,
     responseString = responseString
-  ) %>%
-    t %>%
-    data.frame %>%
-    dplyr::filter(isMatch == TRUE)
+  )
 
-  if(nrow(ScriptJSON) > 1) ScriptJSON  %<>% dplyr::filter(row_number() == 1)
-
+  #todo: refactor
+  matches <- ScriptJSON %>% sapply(FUN = "[", "isMatch") %>% unlist
+  if(sum(matches)){
+    ScriptJSON <- ScriptJSON[[which(matches)]]
+  }else{
+    ScriptJSON <- list(isMatch = FALSE)
+  }
 
   #### todo: refactor this shit
   if(isJSON){
     return(list(type = "application/json"))
   }else if(isHTML){
-    if(identical(TRUE, ScriptJSON$isMatch)){
+    if(ScriptJSON$isMatch){
       hasScriptTag <- responseString %>%
         xml2::read_html() %>%
         html_nodes(xpath = "/script") %>%
@@ -1036,10 +1092,12 @@ findDocType <- function(responseString, targetValues){
       if(hasScriptTag){
         return(list(type = "text/html"))
       }else{
-        return("script/json")
+        ## example: "httpswwwpepsicojobscommainjobspage1.RData"
+        return(ScriptJSON)
       }
     }
     return(list(type = "text/html"))
+    # in case scriptJSON is empty
   }else if(ScriptJSON$isMatch){
     return(ScriptJSON)
   }else{
@@ -1047,6 +1105,9 @@ findDocType <- function(responseString, targetValues){
   }
 }
 
+# regexs <- c("\\{(?:[^{}]|(?R))*\\}", "\\[.*?\\]")
+# jsonRegex <- regexs[1]
+# jsonRegex <- regexs[2]
 checkForJSON <- function(jsonRegex, responseString, targetValues, reqSingleQuote = FALSE){
   jsons <- gregexpr(
     pattern = jsonRegex,
@@ -1060,10 +1121,16 @@ checkForJSON <- function(jsonRegex, responseString, targetValues, reqSingleQuote
   if(length(jsons)){
     # config parameter
     matches <- sapply(targetValues, grepl, fixed = TRUE, x = jsons) %>% as.matrix
-    matchRatio <- matches %>% rowSums() %>% {. / length(targetValues)}
+    matchRatio <- matches %>% colSums() %>% {. / length(targetValues)}
     #if(matchRatio < 0.9) warning(paste0("only ", matchRatio, " per cent of targets found in json wrapped in html text."))
-    JSONIdx <- matchRatio %>% which.max
-    isMatch <- TRUE
+    # config parameter
+    if(sum(matchRatio) / length(matchRatio) < 0.5){
+      JSONIdx <- 0
+      isMatch <- FALSE
+    }else{
+      JSONIdx <- matchRatio %>% which.max
+      isMatch <- TRUE
+    }
   }else{
     isMatch <- FALSE
     JSONIdx <- 0
@@ -1081,9 +1148,10 @@ checkForJSON <- function(jsonRegex, responseString, targetValues, reqSingleQuote
   }
 
   return(
-    c(
+    list(
       type = "script/json",
       isMatch = isMatch,
+      jsons = jsons,
       jsonRegex = jsonRegex,
       JSONIdx = JSONIdx,
       reqSingleQuote = reqSingleQuote
@@ -1254,19 +1322,27 @@ baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys, extractPathes
   xpath <- paste0("\tresponse %<>% read_html %>% html_nodes(xpath = '", extractPathes$xpath, "') %>% html_text")
 
   # todo: what if they are multiple extractions. then index differently
-  indexes <- extractPathes$scriptJsonIndex
+  indexes <- extractPathes$scriptJsonIndex$JSONIdx
   if(length(indexes) > 1){
     indexes <- extractPathes$scriptJsonIndex %>% paste(collapse = ", ") %>% c("c(", ., ")") %>% paste(collapse = "")
+  }
+  regex <- extractPathes$scriptJsonIndex$jsonRegex %>% dput %>% safeDeparse()
+
+  # todo: refactor, that no coercing to string
+  handleQuotes <- ""
+  if(identical(extractPathes$scriptJsonIndex$reqSingleQuote, "TRUE")){
+    handleQuotes <- "response %<>% gsub(pattern = \"'\", '\"')"
   }
 
   scriptJsonIndex <- paste0(c(
     '\tresponse %<>% gregexpr(',
-    '\t\tpattern = "\\\\{(?:[^{}]+|(?R))*?\\\\}",',
+    paste0(c('\t\tpattern = ', regex,','), collapse = ""),
     '\t\tperl = TRUE',
     '\t) %>%',
     '\t\tregmatches(x = response) %>%',
     '\t\tunlist %>%',
-    paste0(c('\t\t.[', indexes,']'), collapse = "")
+    paste0(c('\t\t.[', indexes,']'), collapse = ""),
+    handleQuotes
   ), collapse = "\n")
 
   # todo: what if they are multiple extractions. then index differently
@@ -1347,15 +1423,16 @@ createDocumentGETW <- function(pageUrl = pageUrl, extractPathes = extractPathes,
   if(is.null(fileName)) fileName <- "Notebook_Scraping.Rmd"
   # url <- sivis$browserOutputRaw$url
 
-  base <- extractPathes$json$base %>% dput %>% safeDeparse
-  baseFollow <- extractPathes$json$baseFollow %>% dput %>% safeDeparse
-
+  base <- extractPathes$json[[1]]$json$base %>% dput %>% safeDeparse
+  baseFollow <- extractPathes$json[[1]]$json$baseFollow %>% dput %>% safeDeparse
+  targetKeys <- extractPathes$json[[1]]$json$targetKey %>% safeDeparse()
 
   body <- sivis$headerBody
   if(is.null(needHeader)) needHeader <- FALSE
   headers <- switch(needHeader + 1, NULL, headers %>% dput %>% safeDeparse)
   #isLargeHTML <- extractPathes$json$isLargeHTML
-  targetKeys <- safeDeparse(sivis$targetKeys)
+
+  # todo refactor
   request_code <- paste(c(
     baseGETTemplate(
       pageUrl = pageUrl,
@@ -1444,14 +1521,13 @@ createDocument <- function(pageUrl, extractPathes, testEval = FALSE, reqMethod =
   OneXPathOnly <- TRUE #length(XPathes) == 1
   fileName <- sivis[["fileName"]]
   if(is.null(fileName)) fileName <- "Notebook_Scraping.Rmd"
-  print("needHeader")
-  print(needHeader)
   if(is.null(needHeader)) needHeader <- FALSE
   headers <- base::switch(needHeader + 1, NULL, headers %>% dput %>% safeDeparse)
   hdr <- paste0('(add_headers(.headers = ', headers,')')
   if(is.null(headers)) hdr <- ""
 
-  if(is.null(extractPathes$json)){
+  hasJSON <- is.null(extractPathes$json)
+  if(hasJSON){
     # config parameter should i include empty header to make it more easy to add some?
     getTemplate <- paste0(c('library(httr)',
         'library(DT)',
@@ -2749,9 +2825,11 @@ scheduledRequest <- function(response, targetKeys, base, baseFollow = NULL, reqM
   lastKeys <- sapply(X = splitNames, FUN = tail, n = 1)
 
   base
+
   # todo;do i neeed two of these subsetbystr functions?
+  # todo; refactor
   if(is.null(base)) base <- NA
-  if(any(is.na(base))){
+  if(suppressWarnings(any(is.na(base)))){
     if(length(response) == 1){
       baseElems <- response[[1]]
     }else{
@@ -2766,7 +2844,7 @@ scheduledRequest <- function(response, targetKeys, base, baseFollow = NULL, reqM
   # todo: better refactor here?
   isLargeHTML <- baseElems %>%
     stringr::str_count(pattern = "<") %>%
-    is_greater_than(5)
+    is_greater_than(5) %>% any
 
   # example for islargehtml false alarm: https://www.cfindustries.com/careers/list.html
   if(isLargeHTML & baseElems %>% unlist %>% length %>%  magrittr::equals(1)) return(
