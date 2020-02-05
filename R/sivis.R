@@ -70,6 +70,9 @@ print <- function(x, max = 500){
 
 #only for one job: https://careers.kronos.com/
 
+# selects wrong column element in sivis - header value in column header
+#https://tractorsupply.jobs/jobs/search#/results?keyword&jobcategory=&jobstate=&jobcity=&zipcode&zipradius=20&positiontype=Both&field24417=
+
 
 ### to learn:
 # why does it only work without characters: https://www.zeit.de/index
@@ -99,6 +102,11 @@ print <- function(x, max = 500){
 
 # TODO: DAVID KREISEL _ SCHMALES BUDGET _ RECHTSBEISTAND ONLINE
 
+
+### json validate fail find \n even if i remove it
+#### tried additional json extraction, didnt help: https://stackoverflow.com/questions/59695961/find-json-in-string-with-recursion-limit-in-r-windows
+#### tried to change single to double quote.
+##https://mylan.taleo.net/careersection/myl_usajobs/jobsearch.ftl?lang=en&radiusType=K&location=26140430146&searchExpanded=true&radius=1&portal=101430233
 
 
 #### multiple sources und grün wird nicht gut angezeigt:
@@ -237,11 +245,17 @@ create_sivis <- function(cbData){
   if(reqMethod == "POST" & !alreadyScraped){
 
     sivis$headerBody <- sivis$cbData$request$request$postData$text
+    # sivis$headerBody <- sivis$cbData$request$request$queryString
+
+    # bdy <- sivis$headerBody
+    # list(bdy$value)
+    # c(setNames(object = bdy$value, nm = bdy$name))
 
     sivis$GETContents[[sivis$url]] <- POST(
       url = sivis$url,
       httr::add_headers(.headers = sivis$headers),
-      body = sivis$headerBody
+      body = sivis$headerBody,
+      verbose()
     )
 
     noHeader <- POST(
@@ -399,11 +413,12 @@ if(FALSE){
 ## fromChrome from chrome new scraper newscraper
 createScraper <- function(){
   sivis$cbData <- readClipboard() %>% fromJSON
-  sivis$cbData
+  sivis$cbData$clipBoardText$selectedText %>% head
   sivis$cbData$request$request$url
 
   cbData <- sivis$cbData
   sivis <- create_sivis(cbData)
+
   testRun = TRUE
   success <- use_sivis(sivis, testRun = testRun)
   success
@@ -440,12 +455,14 @@ use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE){
 
   targetValues <- sivis$browserOutput$selectedText %>% gsub(pattern = "\n", replacement = "") %>% trimws
 
+  extract_meta$responseString <- getRes %>% content(type = "text")
+  if(!nchar(extract_meta$responseString)) stop("response body from server seems to be empty.")
 
   ## config parameter - max check
   targetValues <- targetValues[1:min(length(targetValues), 10)]
-  targetInResponse <- sapply(targetValues, grepl, x = responseString, fixed = TRUE) %>%
+  targetInResponse <- sapply(targetValues, grepl, x = extract_meta$responseString, fixed = TRUE) %>%
     {sum(.) / length(.)} %>%
-    magrittr::is_greater_than(0.7)
+    magrittr::is_greater_than(0.4)
   if(!targetInResponse) stop("target values not in filtered server response.")
 
 
@@ -456,8 +473,6 @@ use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE){
   # pageUrl <- sivis$browserOutput$pageUrl
   pageUrl <- sivis$cbData$request$request$url
 
-  extract_meta$responseString <- getRes %>% content(type = "text")
-  if(!nchar(extract_meta$responseString)) stop("response body from server seems to be empty.")
 
   # config parameter - 0.1
   # adjusting target values for findable values in response body.
@@ -573,9 +588,10 @@ use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE){
   return(TRUE)
 }
 
+
 unescape_html2 <- function(str){
   html <- paste0("<x>", paste0(str, collapse = "#_|"), "</x>")
-  parsed <- xml2::xml_text(xml2::read_html(html))
+  parsed <- xml2::xml_text(xml2::read_html(html, options = "HUGE"))
   strsplit(parsed, "#_|", fixed = TRUE)[[1]]
 }
 
@@ -598,6 +614,7 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
     docType <- docTypeInfo$type
   }
 
+
   if(docType == "application/vnd.oracle.adf.resourcecollection+json") docType <- "application/json"
   if(docType != "application/json" & grepl(pattern = "application", x = docType) & grepl(pattern = "json", x = docType)){
     warning(glue("DocType: {docType} seems to be of type 'application/json'. Attempting the corresponding extraction method."))
@@ -605,7 +622,7 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
   }
 
   if(magrittr::not(docType %in% c("text/html", "application/json", "script/json"))){
-    stop(glue("For docType: {docType} there is no extraction method, yet. Please file an issue."))
+    stop(glue("For docType: '{docType}' there is no extraction method, yet. Please file an issue."))
   }
 
   docType
@@ -622,6 +639,8 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
       indexNr = indexNr,
       targetValues = targetValues
     )
+    if(!jsonlite::validate(jsonExtractor$jsons$jsons)) stop("Identified a json, but can not parse it with jsonlite.")
+
     responseString <- jsonExtractor$jsons$jsons
     extractPathes[[length(extractPathes) + 1]] <- list(docTypeInfo)
     names(extractPathes)[length(extractPathes)] <- "scriptJsonIndex"
@@ -700,7 +719,7 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
     )
     htmlResult
     htmlResult$extractPathes
-
+    htmlResult$allFound
     if(all(htmlResult$allFound)){
       if(testRun & !testEval){
         return(
@@ -1091,7 +1110,8 @@ findDocType <- function(responseString, targetValues){
   )
   isHTML
 
-  regexs <- c("\\{(?:[^{}]|(?R))*\\}", "\\[.*?\\]")
+  # more complete solution if necessary: https://stackoverflow.com/questions/59695961/find-json-in-string-with-recursion-limit-in-r-windows.
+  regexs <- c("\\{(?:[^{}]+|(?R))*\\}", "\\[.*?\\]")
   jsonRegex <- regexs[2]
   ScriptJSON <- lapply(
     X = regexs,
@@ -1107,7 +1127,7 @@ findDocType <- function(responseString, targetValues){
   }else{
     ScriptJSON <- list(isMatch = FALSE)
   }
-
+  str(ScriptJSON)
   #### todo: refactor this shit
   if(isJSON){
     return(list(type = "application/json"))
@@ -1136,6 +1156,8 @@ findDocType <- function(responseString, targetValues){
 # regexs <- c("\\{(?:[^{}]|(?R))*\\}", "\\[.*?\\]")
 # jsonRegex <- regexs[1]
 # jsonRegex <- regexs[2]
+
+# more complete solution if necessary: https://stackoverflow.com/questions/59695961/find-json-in-string-with-recursion-limit-in-r-windows.
 checkForJSON <- function(jsonRegex, responseString, targetValues, reqSingleQuote = FALSE){
   jsons <- gregexpr(
     pattern = jsonRegex,
@@ -1271,11 +1293,11 @@ baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys, extractPathes
   xpath <- paste0("\tresponse %<>% read_html %>% html_nodes(xpath = '", extractPathes$xpath, "') %>% html_text")
 
   # todo: what if they are multiple extractions. then index differently
-  indexes <- extractPathes$scriptJsonIndex$JSONIdx
+  indexes <- extractPathes$scriptJsonIndex[[1]]$JSONIdx
   if(length(indexes) > 1){
     indexes <- extractPathes$scriptJsonIndex %>% paste(collapse = ", ") %>% c("c(", ., ")") %>% paste(collapse = "")
   }
-  regex <- extractPathes$scriptJsonIndex$jsonRegex %>% dput %>% safeDeparse()
+  regex <- extractPathes$scriptJsonIndex[[1]]$jsonRegex %>% dput %>% safeDeparse()
 
   # todo: refactor, that no coercing to string
   handleQuotes <- ""
@@ -2752,21 +2774,21 @@ GetRequest <- function(getRes, browserOutputRaw, extractPathes){
 #contentGET[["jobs"]][[1]][["title"]]
 
 ### --> or i make two seperate functions? one for json and one for multiple extractionpathes??
-dir <- "tests/testthat"
-fileNames <- list.files(path = dir, pattern = ".RData")
-#fileName <- fileNames[1]
-for(fileName in fileNames){
-  print(fileName)
-  dir <- "tests/testthat"
-  load(file = file.path(dir, fileName))
-  response <- lst$response
-  base <- lst[["base"]]
-  baseFollow <- lst[["baseFollow"]]
-
-  targetKeys <- lst$targetKeys
-  if(!is.null(baseFollow)) print(2)
-  rm(list = c("response", "base", "baseFollow"))
-}
+# dir <- "tests/testthat"
+# fileNames <- list.files(path = dir, pattern = ".RData")
+# #fileName <- fileNames[1]
+# for(fileName in fileNames){
+#   print(fileName)
+#   dir <- "tests/testthat"
+#   load(file = file.path(dir, fileName))
+#   response <- lst$response
+#   base <- lst[["base"]]
+#   baseFollow <- lst[["baseFollow"]]
+#
+#   targetKeys <- lst$targetKeys
+#   if(!is.null(baseFollow)) print(2)
+#   rm(list = c("response", "base", "baseFollow"))
+# }
 
 
 scheduledRequest <- function(response, targetKeys, base, baseFollow = NULL, reqMethod = "GET", headers = NULL, body = NULL){
@@ -2912,7 +2934,7 @@ createBody <- function(bodyRaw){
   body <- lapply(bodyValueLabel, "[", 2)
   names(body) <- sapply(bodyValueLabel, "[", 1)
 
-  header[is.na(body)] <- ""
+  #header[is.na(body)] <- ""
   return(body)
 }
 
