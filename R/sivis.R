@@ -1,3 +1,9 @@
+### Randbedingungen
+# - nur Textdaten
+# - wenn mehrere Daten/Seiten, auf 2-X Seite gehen, weil dann alle Parameter da sind.
+
+
+
 # Anforderungen, Beispiele für Funktionen sammeln.
 # substr321 entsprechend umbenennen umschreiben
 # Automatisches testen für die kreierung von den scrapern bauen.
@@ -80,6 +86,7 @@ print <- function(x, max = 500){
 ### feature request for sivisChrome: problem becaues first element is html but not target. exclude elements
 # https://www.cimarex.com/careers/current-opportunities/default.aspx --> netxt problem is request$requestUrl empty and does he take an old one then?
 # ended up with url for pepsi?
+# also up here: https://www.incyte.com/join-us/careers
 
 # encoding:
 # httpscareerslillycomsearchjobs - request ist korrekt aus R heraus. Encoding von sivis chrome ist falsch. seite --> https://careers.lilly.com/search-jobs
@@ -103,6 +110,7 @@ print <- function(x, max = 500){
 # TODO: DAVID KREISEL _ SCHMALES BUDGET _ RECHTSBEISTAND ONLINE
 
 
+
 ### json validate fail find \n even if i remove it
 #### tried additional json extraction, didnt help: https://stackoverflow.com/questions/59695961/find-json-in-string-with-recursion-limit-in-r-windows
 #### tried to change single to double quote.
@@ -118,6 +126,10 @@ print <- function(x, max = 500){
 # still c stack errors / warnings:
 ### httpswwwroberthalfcomworkwithuscareersatroberthalfinternaljobsalljobsalllocationsalltypesroberthalfca.RData
 # https://careers.globelifeinsurance.com/jobs/jobs-by-category?
+
+
+## multiple sources:
+#https://ekkh.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/requisitions
 
 # double extract_json --> means i need multiple targetkeys?
 
@@ -251,12 +263,24 @@ create_sivis <- function(cbData){
     # list(bdy$value)
     # c(setNames(object = bdy$value, nm = bdy$name))
 
+
+    verboseLogName <- "verbose3.log"
+    con <- file(verboseLogName)
+    sink(file = con, append = TRUE)
+    sink(con, append = TRUE, type = "message")
+
     sivis$GETContents[[sivis$url]] <- POST(
       url = sivis$url,
       httr::add_headers(.headers = sivis$headers),
       body = sivis$headerBody,
       verbose()
     )
+
+    sink()
+    sink(type = "message")
+    sivis$verboseLog <- verboseLogName %>% readLines %>% paste(collapse = "\n")
+    unlink(verboseLogName)
+
 
     noHeader <- POST(
       url = sivis$url,
@@ -438,7 +462,15 @@ createScraper <- function(){
 # grep(pattern = "&#8211;", x = extract_meta$responseString2)
 # grep(pattern = "-", x = extract_meta$responseString2)
 
-use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE){
+use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE, allow){
+
+  scrapeAllowed <- robotstxt::paths_allowed(paths = sivis$browserOutput$pageUrl, warn = FALSE)
+  if(!scrapeAllowed) stop("robotstxt does not allow scraping this page.")
+  # example error: robotstxt::paths_allowed(paths = "https://www.google.com/")
+  # domain <- urltools::domain(sivis$browserOutput$pageUrl)
+  #httr::GET(url = paste0("https://www.", domain, "/robots.txt"))
+
+  if(!scrapeAllowed) stop("")
 
   extract_meta <- list()
 
@@ -456,6 +488,7 @@ use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE){
   targetValues <- sivis$browserOutput$selectedText %>% gsub(pattern = "\n", replacement = "") %>% trimws
 
   extract_meta$responseString <- getRes %>% content(type = "text")
+  if(is.na(extract_meta$responseString)) stop("response body from server is not available.")
   if(!nchar(extract_meta$responseString)) stop("response body from server seems to be empty.")
 
   ## config parameter - max check
@@ -616,9 +649,17 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
 
 
   if(docType == "application/vnd.oracle.adf.resourcecollection+json") docType <- "application/json"
+  if(docType == "application/xhtml+xml") docType <- "text/html"
+
   if(docType != "application/json" & grepl(pattern = "application", x = docType) & grepl(pattern = "json", x = docType)){
-    warning(glue("DocType: {docType} seems to be of type 'application/json'. Attempting the corresponding extraction method."))
+    warning(glue("DocType: {docType} seems to be of type 'application/json'. Attempting the corresponding extraction method.
+                  Please file an issue to add this document type to the list with an indication whether the scrape was successful."))
     docType <- "application/json"
+  }
+  if(docType != "text/html" & grepl(pattern = "html", x = docType)){
+    warning(glue("DocType: {docType} seems to be of type 'text/html'. Attempting the corresponding extraction method.
+                  Please file an issue to add this document type to the list with an indication whether the scrape was successful."))
+    docType <- "text/html"
   }
 
   if(magrittr::not(docType %in% c("text/html", "application/json", "script/json"))){
@@ -1066,6 +1107,7 @@ test_html <- function(responseString, targetValues){
   isList <- doc %>%
     typeof %>%
     magrittr::equals("list")
+  isList
 
   # get false alarm for html if its text json instead, check if i find the tags
   # todo: do ireally want to check if over sapply and df/matrix?
@@ -1093,7 +1135,7 @@ test_html <- function(responseString, targetValues){
   #   lengths %>%
   #   all
 
-  if(isList & foundTags & length(tags) == 1) stop ("HEEEEEEEEEREEE")
+  #if(isList & foundTags & length(tags) == 1) stop ("HEEEEEEEEEREEE")
   htmlFound <- isList & yieldsUsefulXPATH
   return(htmlFound)
 }
