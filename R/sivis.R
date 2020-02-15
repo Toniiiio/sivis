@@ -2964,10 +2964,6 @@ allJSONValues <- function(jsonContent, targetValues){
       unique %>%
       as.character
 
-    # example: https://cboe.wd1.myworkdayjobs.com/External_Career_CBOE
-    # todo: very dirty: collecting more examples
-    if(tail(match, 1) == targetKey) match %<>% head(n = -1)
-
   }else{
 
     if(baseCandidates %>% unlist %>% unique %>% length %>% magrittr::is_greater_than(1)){
@@ -2977,6 +2973,10 @@ allJSONValues <- function(jsonContent, targetValues){
     }
 
   }
+
+  # example: https://cboe.wd1.myworkdayjobs.com/External_Career_CBOE
+  # todo: very dirty: collecting more examples
+  if(tail(match, 1) == targetKey) match %<>% head(n = -1)
 
   # match <- parentElemNmsRaw %>% {ifelse(test = length(.) > 1, yes =  head(n = -1), no = .)} %>% c
   # roberts half: c("rh_job_search", "initial_results") fails if head(n = -1) is used
@@ -3089,7 +3089,7 @@ unpack_JSON <- function(response, targetKeys, base, baseFollow = NULL){
 
 
   if(!length(baseElems)) return(NULL)
-  targetKey <- targetKeys[8]
+  targetKey <- targetKeys[4]
   texts <- lapply(targetKeys, function(targetKey){
     baseElem <- baseElems[[1]]
     raw <- sapply(baseElems, function(baseElem){
@@ -3110,6 +3110,11 @@ unpack_JSON <- function(response, targetKeys, base, baseFollow = NULL){
   res <- do.call(what = cbind, texts)
   colnames(res) <- targetKeys
   rownames(res) <- NULL
+
+  addLinks <- TRUE
+  if(addLinks){
+    res$Href <- sivis$browserOutput$links
+  }
 
   list(
     res = res,
