@@ -798,6 +798,7 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
     # nest in else if otherwise json with html is extracted and jumped right into html extraction
     # without adjusting the inputs
   }else if(docType == "text/html"){
+
     # config parameter
     maxCheck = 5
     htmlResult <- extract_HTML(
@@ -812,8 +813,8 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
     htmlResult$allFound
 
     # have to set xpath to environ/global variable, so that later on xpathes can be added
-    XPathes <- htmlResult$extractPathes
-    extractPathes[[length(extractPathes) + 1]] <- list(htmlResult$extractPathes)
+    XPathes <- htmlResult$extractPathes$xpath
+    extractPathes[[length(extractPathes) + 1]] <- htmlResult$extractPathes
     names(extractPathes)[length(extractPathes)] <- "xpath"
 
     if(all(htmlResult$allFound)){
@@ -827,6 +828,7 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
       testEval <- createDocument(
         pageUrl = pageUrl,
         reqMethod = reqMethod,
+        responseString = responseString,
         extractPathes = extractPathes,
         body = body,
         XPathes = XPathes,
@@ -899,7 +901,7 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
   attr = NULL #"class"
   byIndex = TRUE
 
-  XPathCandidates <- sapply(
+  XPathAllCols <- lapply(
     X = allText,
     FUN = getXPath,
     allText = allText,
@@ -909,8 +911,11 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
     attr = attr, #"class"
     byIndex = byIndex
   )
-  XPathCandidates %<>% unlist %>% unique
+
+  XPathCandidates <- lapply(XPathAllCols, "[[", "xpathes") %>% unlist %>% unique
   XPathCandidates
+
+  ColAltern <- lapply(XPathAllCols, "[[", "ColsAltern") %>% unlist %>% unique
   # alternative approach go for frequencies
   #XPathCandidates <- xpathes %>% c %>% table %>% data.frame
 
@@ -956,7 +961,7 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
   # todo: What do i want to do if not all values are found
   list(
     allFound = allFound,
-    extractPathes = xpath,
+    extractPathes = list(xpath = xpath, ColAltern = ColAltern),
     resultValues = resultValues
   )
 }
@@ -1190,7 +1195,19 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list(), r
 #'
 #' @examples
 # addXPath()
-addXPath <- function(){
+
+addXPathFromShiny <- function(XPathes, source = "shiny"){
+  rstudioapi::documentSave(id = "Notebook_scraping.Rmd") # do i need this? does it work?
+
+  existingXPathes <- getXPathFromScript()
+  c(existingXPathes, XPathes) %>% unique
+
+  createDocument(browserOutput = browserOutput, OneXPathOnly = FALSE)
+
+}
+
+
+addXPath_Deprecated <- function(){
   XpathNr <- length(sivis$XPathes)
   browserOutput <- readClipboard() %>% fromJSON
   browserOutput$selectedText <- trimws(gsub(pattern = "\n", replacement = "", x = browserOutput$selectedText))
@@ -1209,13 +1226,14 @@ addXPath <- function(){
     gsub(pattern = "\n|\t", replacement = "") %>%
     trimws
   matches <- candidates %in% browserOutput$clipBoardText$selectedText
+  if(length(matches)) matches <- 0
   if(sum(matches) / length(matches) > 0.4){
     xpathRaw <- browserOutput$clipBoardText$XPath
   }else{
     while(xpathRaw  == ""){
       xpathRaw <- getXPath(
-        url = browserOutput$pageUrl,
-        text = browserOutput$selectedText[XPathIter],
+        url = browserOutput$clipBoardText$pageUrl,
+        text = browserOutput$clipBoardText$selectedText[XPathIter],
         exact = FALSE,
         doc = sivis$doc
       )
@@ -1568,11 +1586,11 @@ baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys = NULL, extrac
     isString = extractPathes$ArrayIndex$isString
 
     ArrayIndex <- glue("\tseq <- seq(from = {from}, to = {to}, by = {by})")
-    display <- paste0("\ttbl <- do.call(what = rbind, args = output) %>% \n\tunlist %>% \n\tunname %>%", singleQuote, isString," \n\t.[seq] %>% \n\tdata.frame(data = .)")
+    display <- paste0("tbl <- do.call(what = rbind, args = output) %>% \n\tunlist %>% \n\tunname %>%", singleQuote, isString," \n\t.[seq] %>% \n\tdata.frame(data = .)")
   }else{
     # dont unlist for sivis additional keys: "tr_j_httpscareersgooglecomapijobsjobsv1searchcompanyGooglecompanyYouTubehlenjloenUSlocationZC3BCrich2C20S.RData"
     # %>% unlist %>% unname %>% data.frame(data = .)
-    display <- "\ttbl <- do.call(what = rbind, args = output) "
+    display <- "tbl <- do.call(what = rbind, args = output) "
   }
   # indexes <- extractPathes$scriptJsonIndex[[1]]$JSONIdx
   # if(length(indexes) > 1){
@@ -1766,7 +1784,7 @@ createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathe
   file.edit(fileName)
 }
 
-createDocument <- function(pageUrl, extractPathes, testEval = FALSE, reqMethod = "GET", useHeader = FALSE, body = NULL, XPathes = ""){
+createDocument <- function(pageUrl, extractPathes, responseString, testEval = FALSE, reqMethod = "GET", useHeader = FALSE, body = NULL, XPathes = ""){
 
   # XPathes <- sivis$XPathes
   OneXPathOnly <- TRUE #length(XPathes) == 1
@@ -1777,8 +1795,8 @@ createDocument <- function(pageUrl, extractPathes, testEval = FALSE, reqMethod =
   hdr <- paste0('(add_headers(.headers = ', headers,'))')
   if(is.null(headers)) hdr <- ""
 
-  hasJSON <- is.null(extractPathes$json)
-  if(hasJSON){
+  noJSON <- is.null(extractPathes$json)
+  if(noJSON){
     # config parameter should i include empty header to make it more easy to add some?
     getTemplate <- paste0(c('library(httr)',
                             'library(DT)',
@@ -1799,9 +1817,6 @@ createDocument <- function(pageUrl, extractPathes, testEval = FALSE, reqMethod =
     base <- safeDeparse(dput(extractPathes$json$base))
     baseFollow <- safeDeparse(dput(extractPathes$json$baseFollow))
     targetKeys <- safeDeparse(sivis$targetKeys)
-    # isLargeHTML <- extractPathes$json$isLargeHTML
-
-    body <- body
 
     getTemplate <- baseGETTemplate(
       pageUrl = pageUrl,
@@ -1827,13 +1842,11 @@ createDocument <- function(pageUrl, extractPathes, testEval = FALSE, reqMethod =
     displayResults <- "do.call(rbind, output) %>% c %>% data.frame %>% DT::datatable()"
   }
 
-  if(OneXPathOnly){
-
-    request_code <- paste(c('options(stringsAsFactors = FALSE)',
+  request_code <- paste(c('options(stringsAsFactors = FALSE)',
                             'library(xml2)',
                             getTemplate,
                             getFinishTemplate
-    ), collapse = "\n")
+  ), collapse = "\n")
 
     if(testEval){
       success <- tryCatch(
@@ -1842,6 +1855,32 @@ createDocument <- function(pageUrl, extractPathes, testEval = FALSE, reqMethod =
       )
       return(TRUE)
     }
+
+
+  # doc <- responseString %>% read_html %>% html_nodes(xpath = extractPathes$xpath$ColAltern[1]) %>% html_nodes(xpath = "..")
+  xp1 = XPathes
+  sivis$XPathes <- XPathes
+  xp2 = extractPathes$xpath$ColAltern[2]
+
+  commonXPathRes <- CommonXPathData(
+    responseString = responseString,
+    xp1 = xp1,
+    xp2 = xp2,
+    extractPathes = extractPathes
+  )
+
+  addCols <- commonXPathRes$addColsOutput
+  rootXpath <- commonXPathRes$rootXPath
+
+  mat <- apply(addCols, 1, function(row) !is.na(row) & nchar(row))
+  idx1 <- apply(mat, 2, sum) %>% order(decreasing = TRUE)
+  missing <- mat[, idx1[1]] %>% magrittr::not() %>% which
+  idx2 <- apply(mat[missing, ,drop = FALSE], 2, sum) %>% order(decreasing = TRUE)
+
+  idx <- c(idx1[1], setdiff(idx2, idx1[1]))
+  addCols <- addCols[idx, ]
+  assign("addCols", addCols, envir = .GlobalEnv)
+
 
 
     #try(eval(parse(text = rcode), envir = .GlobalEnv))
@@ -1856,50 +1895,208 @@ createDocument <- function(pageUrl, extractPathes, testEval = FALSE, reqMethod =
                      'The required content was found in the source code. Therefore, rvest was chosen over RSelenium due to performance reasons.',
                      '',
                      '```{r}',
+
                      request_code,
+
                      displayResults,
+
+                     addColsOption(
+                       rootXpath = rootXpath,
+                       pageUrl = pageUrl,
+                       selectedCol = 1 # initially only the column is selected, that was selected in the browser.
+                      ),
+
                      '```'),
                    collapse = "\n"),
       con = fileName
     )
     file.edit(fileName)
-
-  }else{
-    xp <- paste(XPathes, collapse = ",\n\t")
-    rcode <- paste0(c('options(stringsAsFactors = FALSE)',
-                      'library(rvest)',
-                      'library(DT)',
-                      paste0('url <- "', pageUrl, '"'),
-                      paste0('xpathes <- ', paste(c(paste(c("data.frame(", xp), collapse = "\n\t"), ")"), collapse = "\n")),
-                      'code <- read_html(x = url)',
-                      'data <- sapply(xpathes, function(xpath) html_nodes(x = code, xpath = xpath) %>% html_text())',
-                      'dt <- datatable(',
-                      '\tdata = data,',
-                      '\toptions = list(pageLength = 10)',
-                      ')',
-                      'dt'), collapse = "\n")
-
-
-    tryCatch(eval(parse(text = rcode)),error = function(e) NULL) #, envir = .GlobalEnv
-
-    writeLines(
-      text = paste0(c('---',
-                      'title: "R Notebook"',
-                      'output: html_notebook',
-                      '---',
-                      '',
-                      paste0('This is a scraping suggestion for the following website: ', pageUrl, '.'),
-                      'The required content was found in the source code. Therefore, a get request will be performed on the target document.',
-                      '',
-                      '```{r}',
-                      rcode
-                      ,'```'),
-                    collapse = "\n"
-      ), con = fileName)
-    file.edit(fileName)
-  }
 }
 
+addColsOption <- function(rootXpath, pageUrl, selectedCol){
+  paste0(
+    c(
+      '```',
+      '',
+      '',
+      'Potential new fields to consider:',
+      '',
+      '```{r}',
+      'library(shiny)',
+      '',
+      'ui <- fluidPage(',
+      '\th5(tags$b("Click on columns to add/remove an xpath from the scraper.")),',
+      '\tbr(),',
+      '\tDT::dataTableOutput("tbl", height = "100%"),',
+      '\tbr(),',
+      '\th5(tags$i("Rows are ordered so that empty columns are attempted to be avoided on the first page.")),',
+      '\tbr(),',
+      '\tactionButton(',
+      '\t\tinputId = "updateDocument",',
+      '\t\tlabel = "Add selected columns to document:",',
+      '\t\ticon("paper-plane"),',
+      '\t\tstyle="color: #fff; background-color: #337ab7; border-color: #2e6da4"',
+      '\t)',
+      ')',
+
+      'server <- function(input, output, session){',
+      '',
+      '\tobserveEvent(eventExpr = input$updateDocument,{',
+      '\t\t#file.remove("Notebook_Scraping.Rmd")',
+      paste0('\t\trootXPath <- ', rootXpath %>% safeDeparse,' '),
+      paste0('\t\tpageUrl <- ', pageUrl %>% safeDeparse,' '),
+      '\t\tXPathes <- names(addCols)[input$tbl_columns_selected]',
+      '\t\tupdateDocument(',
+      '\t\t\tXPathes = XPathes,',
+      '\t\t\trootXPath = rootXPath,',
+      '\t\t\tpageUrl = pageUrl,',
+      '\t\t\tselectedCol = input$tbl_columns_selected %>% sort %>% safeDeparse',
+      ')',
+      '\t\tstopApp(returnValue = invisible())',
+      '\t})',
+      '',
+      '\toutput$tbl = DT::renderDataTable(',
+      '\t\taddCols,',
+      '\t\tserver = FALSE,',
+      paste0('\t\tselection = list(mode = "multiple", target = "column", selected = ', selectedCol,'),'),
+      '\t\toptions = list(pageLength = 10, autoWidth = TRUE)',
+      '\t)',
+      '}',
+      '',
+      'runApp(\n\tappDir = shinyApp(ui, server), \n\tlaunch.browser = rstudioapi::viewer\n)'
+    )
+  )
+}
+
+updateDocument <- function(XPathes, rootXPath, pageUrl, selectedCol){
+  fileName <- "Notebook_Scraping.Rmd"
+  xp <- paste(XPathes, collapse = ",\n\t")
+
+  amtXP <- length(XPathes)
+  rcode <- paste0(c('options(stringsAsFactors = FALSE)',
+                    'library(rvest)',
+                    'library(DT)',
+                    '',
+                    paste0('url <- "', pageUrl, '"'),
+                    paste0('xpathes <- ', paste(c(paste(c("data.frame(", glue("XPath{1:amtXP} = '{XPathes}'{c(rep(',', amtXP - 1), '')}\n\t")), collapse = "\n\t"), ")"), collapse = "\n")),
+                    'nodes <- read_html(x = url) %>% html_nodes(xpath = ', rootXPath %>% safeDeparse,')',
+                    'data <- lapply(xpathes, function(xpath){',
+                    '\tlapply(nodes, function(node) html_nodes(x = node, xpath = xpath) %>% {ifelse(length(.), yes = html_text(.), no = NA)}) %>% unlist',
+                    '})',
+                    'dt <- datatable(',
+                    '\tdata = data %>% do.call(what = cbind),',
+                    '\toptions = list(pageLength = 10)',
+                    ')',
+                    'dt'), collapse = "\n")
+
+
+  tryCatch(eval(parse(text = rcode)),error = function(e) NULL) #, envir = .GlobalEnv
+
+  writeLines(
+    text = paste0(c('---',
+                    'title: "R Notebook"',
+                    'output: html_notebook',
+                    '---',
+                    '',
+                    paste0('This is a scraping suggestion for the following website: ', pageUrl, '.'),
+                    'The required content was found in the source code. Therefore, a get request will be performed on the target document.',
+                    '',
+                    '```{r}',
+                    rcode,
+                    addColsOption(rootXPath, pageUrl, selectedCol),
+                    '```'),
+                  collapse = "\n"
+    ), con = fileName)
+  file.edit(fileName)
+}
+
+
+# commonXPathes(responseString = responseString, xp1 = XPathes, xp2 = extractPathes$xpath$ColAltern[2])
+
+commonXPathes <- function(doc, xp1, xp2){
+  nodes1 <- list()
+  nodes2 <- list()
+
+  nodes1[[1]] <- html_node(x = doc, xpath = xp1)
+  nodes2[[1]] <- html_node(x = doc, xpath = xp2)
+
+  tagsSame <- identical(nodes1[[1]], nodes2[[1]])
+  while(!tagsSame){
+    nodes1 <- c(nodes1, tail(nodes1, 1)[[1]] %>% html_nodes(xpath = ".."))
+    nodes2 <- c(nodes2, tail(nodes2, 1)[[1]] %>% html_nodes(xpath = ".."))
+    mat <- matrix(NA, nrow = length(nodes1), ncol = length(nodes2))
+    for(nr1 in 1:length(nodes1)){
+      for(nr2 in 1:length(nodes2)){
+        mat[nr1, nr2] <- identical(nodes1[nr1], nodes2[nr2])
+      }
+    }
+    ######outer(nodes1[1:2], nodes2[1], FUN = identical) doesnt work
+    tagsSame <- mat %>% sum
+  }
+  idx <- apply(mat, 1, which) %>% unlist %>% min
+  commonXPath <- nodes1[[idx]] %>%
+    getXPathByTag(doc = doc) %$%
+    xpath
+  commonXPath
+}
+
+CommonXPathData <- function(responseString, xp1, xp2, extractPathes){
+
+  doc <- responseString %>% read_html
+  rootPath = commonXPathes(doc, xp1, xp2)
+
+  addCols <- lapply(
+    X = c(xp1, extractPathes$xpath$ColAltern),
+    FUN = findTextGivenRoot,
+    rootPath = rootPath,
+    doc = doc
+  )
+
+  addCols %<>% .[!is.null(.)]
+
+  addCols <- addCols[!sapply(addCols, is.null)]
+
+  addColsOutput <- sapply(addCols, "[", "texts") %>%
+    do.call(what = cbind) %>%
+    data.frame
+
+  names(addColsOutput) <- sapply(addCols, "[", "xpCand") %>%
+    as.character
+
+  list(
+    addColsOutput = addColsOutput,
+    rootXPath = rootPath
+  )
+}
+
+findTextGivenRoot <- function(rootPath, XPath, doc){
+  allText <- html_nodes(x = doc, xpath = XPath) %>% html_text()
+  if(!length(allText)) return()
+
+  xpCand <- getXPathByTag(
+    tag = html_node(x = doc, xpath = XPath),
+    rootPath = rootPath,
+    allText = allText,
+    doc = doc
+  )$xpath
+  if(substr(xpCand, 1, 1) == "/") xpCand %<>% substr(start = 2, stop = nchar(.))
+
+  nodes <- html_nodes(x = doc, xpath = rootPath)
+  texts <- lapply(
+    X = nodes,
+    FUN = html_nodes,
+    xpath = xpCand
+  ) %>% lapply(
+    FUN = function(node){
+      ifelse(test = length(node), yes = html_text(node), no = NA)
+    }
+  )
+
+  list(
+    xpCand = xpCand,
+    texts = texts
+  )
+}
 
 OneTimeScrape <- function(){
   splitted <- strsplit(
@@ -2133,7 +2330,6 @@ getXPath <- function(url, text = NULL, xpath = NULL, exact = FALSE, doc = NULL, 
     xpathForAttrib <- paste0("//@*[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ', 'abcdefghijklmnopqrstuvwxyz'),'", text,"')]")
     tags <- doc %>% html_nodes(xpath = xpathForAttrib)
 
-
     if(length(tags)){
       xpathOfAttrib <- getXPathByTag(tag = tags[1] %>% html_nodes(xpath = ".."), allText = targetValues)
       message(glue("targetvalues found in attribute: '{tags %>% html_name}' in element with xpath: {xpathOfAttrib}."))
@@ -2149,18 +2345,27 @@ getXPath <- function(url, text = NULL, xpath = NULL, exact = FALSE, doc = NULL, 
   # somehow cant use apply family here. last tag vanishes.
   nr <- 1
   xpathes <- rep(NA, length(tags))
+  ColsAltern <- list()
   tag <- tags[nr]
   for(nr in 1:length(tags)){
-    xpathes[nr] <- getXPathByTag(
+    allXP <- getXPathByTag(
       tag = tags[nr],
       attr = attr,
       byIndex = byIndex,
       allText = allText,
       doc = doc
     )
+    xpathes[nr] <- allXP$xpath
+    ColsAltern[[nr]] <- allXP$xpathOtherCols
   }
 
-  xpathes
+  ColsAltern %<>% unlist %>% unique
+
+  list(
+    xpathes = xpathes,
+    ColsAltern = ColsAltern
+  )
+
 }
 
 # byIndex = FALSE
@@ -2246,10 +2451,9 @@ getXPathByText <- function(text, doc, exact = FALSE, attr = NULL, byIndex = FALS
 
 }
 
-
 #tag <- tags[[1]]
-getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allText, doc){
-  # print("JUMP OVER BREAKPOINT")
+getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allText = NULL, doc, rootPath = "/*"){
+  rootTags <- doc %>% html_nodes(xpath = rootPath)
 
   tagName <- ""
   tags <- ""
@@ -2257,6 +2461,8 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
 
   tag <- as.list(tag)
   iterTag <- tag # in case of debugging nike needed
+  tagsOtherCols <- NULL
+
   while(!XPathFound){
     tagName <- iterTag %>% html_name
     # print(iterTag)
@@ -2281,13 +2487,18 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
         lengths %>%
         {sum(.) / length(.)}
       hasAllChildren <- percentageFound > 0.7
+      if(is.null(allText)) hasAllChildren <- TRUE
 
       # hasAllChildren <- sapply(allText, grepl, x = childrenMatchText, fixed = TRUE) %>%
       #   matrix(nrow = length(allText)) %>%
       #   rowSums %>%
       #   which.max
       firstRound <- is.null(tags)
-      if(!hasAllChildren | firstRound | all(unique(tags) %in% "")){
+      needIndex <- !hasAllChildren | firstRound | all(unique(tags) %in% "")
+      needIndex
+      matches <- c()
+      hasTarget <- FALSE
+      if(needIndex){
         matches <- rep(0, length(childrenMatchTag))
         # dont need to set index if there is only one element with same tag type.
         # for consistency with chrome output.
@@ -2295,58 +2506,90 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
           for(nr in 1:length(childrenMatchTag)){
             matches[nr] <- identical(childrenMatchTag[nr], iterTag)
           }
+          hasTarget <- allText %in% html_text(childrenMatchTag) %>% sum
+          if(is.null(allText)) hasTarget <- 1
           tagNameInsert <- glue("{tagName}[{which(matches == 1)}]")
+          if(hasTarget) tagNameAltern <- glue("{tagName}[{which(matches != 1)}]")
         }
       }
-      XPathFound <- tagName != "html"
+
+      # todo: refactor
+      if(!length(iterTag)){
+        # need this if iterTag is empty: xml_nodeset of 0.
+        XPathFound <- FALSE
+      }else{
+        # need this if it has two elements. need to better understand this.
+
+        XPathFound <- iterTag %in% rootTags %>% sum
+      }
     }
 
-    # if(!is.null(attr)){
-    #
-    #   NoClass <- checkXPath(
-    #     tagNameInsert = tagNameInsert,
-    #     tags = tags,
-    #     allText = allText
-    #   )
-    #   NoClass
-    #   if(NoClass$XPathFound) return(NoClass$XPath)
-    #
-    #   # check if the tag has a class
-    #   classes <- iterTag %>%
-    #     html_attr(attr) %>%
-    #     strsplit(split = " ") %>%
-    #     unlist
-    #   classes
-    #   if(!is.na(classes)){
-    #     #checkXPath(tagNameInsert, AmtElemBefore = NoClass$AmtElemFound, class = classes[1])
-    #     WithClasses <- lapply(
-    #       X = classes,
-    #       FUN = checkXPath,
-    #       tags = tags,
-    #       tagNameInsert = tagNameInsert,
-    #       AmtElemBefore = NoClass$AmtElemFound,
-    #       allText = allText
-    #     ) %>% do.call(what = rbind)
-    #     WithClasses
-    #     WithClasses %<>% dplyr::filter(nchar(class) > 0)
-    #     WithClasses
-    #     if(nrow(WithClasses)){
-    #       tagNameInsert <- glue("{tagName}[contains(@class, '{WithClasses$class}')]")
-    #     }
-    #   }
-    # }
+    if(length(matches) > 1 & hasTarget){
+      tagsOtherCols <- lapply(tagNameAltern, function(tag) c(tags, tag))
+    }else{
+      if(!is.null(tagsOtherCols)){
+        tagsOtherCols <- lapply(tagsOtherCols, function(tag) c(tag, tagNameInsert))
+      }
+    }
 
     tags <- c(tags, tagNameInsert)
     iterTag <- iterTag %>% html_nodes(xpath = "..")
-    XPathFound <- !length(iterTag) & XPathFound
+    #XPathFound <- !length(iterTag) & XPathFound
   }
 
   #todo: sometimes a tag "text" comes up, that i dont want. However, if i debug nike jobsite
   # tag script does not come up, but i want it.
   tags <- tags[magrittr::not(tags %in% c("text", ""))]
+  if(rootPath != "/*") tags <- tags[-length(tags)]
   xpath <- paste(c("", tags[length(tags):1]), collapse = "/")
-  xpath
+
+  xpathOtherCols <- lapply(tagsOtherCols, FUN = function(tags){
+    tags <- tags[magrittr::not(tags %in% c("text", ""))]
+    paste(c("", tags[length(tags):1]), collapse = "/")
+  })
+
+  return(
+    list(
+      xpath = xpath,
+      xpathOtherCols = xpathOtherCols
+    )
+  )
 }
+
+# if(!is.null(attr)){
+#
+#   NoClass <- checkXPath(
+#     tagNameInsert = tagNameInsert,
+#     tags = tags,
+#     allText = allText
+#   )
+#   NoClass
+#   if(NoClass$XPathFound) return(NoClass$XPath)
+#
+#   # check if the tag has a class
+#   classes <- iterTag %>%
+#     html_attr(attr) %>%
+#     strsplit(split = " ") %>%
+#     unlist
+#   classes
+#   if(!is.na(classes)){
+#     #checkXPath(tagNameInsert, AmtElemBefore = NoClass$AmtElemFound, class = classes[1])
+#     WithClasses <- lapply(
+#       X = classes,
+#       FUN = checkXPath,
+#       tags = tags,
+#       tagNameInsert = tagNameInsert,
+#       AmtElemBefore = NoClass$AmtElemFound,
+#       allText = allText
+#     ) %>% do.call(what = rbind)
+#     WithClasses
+#     WithClasses %<>% dplyr::filter(nchar(class) > 0)
+#     WithClasses
+#     if(nrow(WithClasses)){
+#       tagNameInsert <- glue("{tagName}[contains(@class, '{WithClasses$class}')]")
+#     }
+#   }
+# }
 
 
 
@@ -3087,17 +3330,20 @@ unpack_JSON <- function(response, targetKeys, base, baseFollow = NULL){
     )
   )
 
+  # could go for rlist::list.flatten but how to ensure then that i have the elements of same length?
+  # baseElems2 <- rlist::list.flatten(baseElems) %>% list ###### TRY ME
 
   if(!length(baseElems)) return(NULL)
-  targetKey <- targetKeys[4]
+
+  targetKey <- targetKeys[1]
   texts <- lapply(targetKeys, function(targetKey){
-    baseElem <- baseElems[[1]]
+    baseElem <- baseElems[1]
     raw <- sapply(baseElems, function(baseElem){
       if(!is.null(baseFollow)){
         #### bei https://www.fbhs.com/careers  baseElem$baseFollow bzw. baseElem[["baseFollow"]]
         baseElem <- baseElem[[baseFollow]] #subsetByStr3(lstRaw = baseElem, arr = baseFollow)
       }
-      subsetByStr3(lstRaw = baseElem, arr = targetKey)
+      subsetByStr3(lstRaw = baseElems, arr = targetKey)
     }, USE.NAMES = FALSE)
     raw2 <- sapply(raw, paste, collapse = " | ") %>% unname
     if(!length(raw2)) return(raw2)
@@ -3221,4 +3467,5 @@ anonymise <- function(str){
 # Cant get the data in clipboard cache. --> Restart Chrome :(
 #https://karriere.rewe.de/jobs/suche?term=
 
-
+# httpshenryscheintaleonetcareersectionhsi1moresearchftllangen.RData
+#httpscareersglobelifeinsurancecomjobsjobsbycategory.RData
