@@ -449,7 +449,7 @@ if(FALSE){
 
     fl <- list.files(path = "R/fromWeb/", pattern = ".RData")[nr]
 
-    # fl <-  "tr_j_httpscareersgooglecomapijobsjobsv1searchcompanyGooglecompanyYouTubehlenjloenUSlocationZC3BCrich2C20S.RData"
+    fl <-  "x_r_j_httpscareerscampbellsoupcompanycomusensearchresultsfrom10s1.RData"
 
     load(file = paste0("R/fromWeb/", fl))
     if(sivis$useHeader %>% is.null) sivis$useHeader <- FALSE
@@ -901,6 +901,7 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
   attr = NULL #"class"
   byIndex = TRUE
 
+  # text = allText[4]
   XPathAllCols <- lapply(
     X = allText,
     FUN = getXPath,
@@ -912,10 +913,12 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
     byIndex = byIndex
   )
 
-  XPathCandidates <- lapply(XPathAllCols, "[[", "xpathes") %>% unlist %>% unique
+  # need single accces "[" for:  "httpswwwfocusde.RData"
+  XPathCandidates <- lapply(XPathAllCols, "[", "xpathes") %>% unlist %>% unique
   XPathCandidates
 
-  ColAltern <- lapply(XPathAllCols, "[[", "ColsAltern") %>% unlist %>% unique
+  # need single accces "[" for:  "httpswwwfocusde.RData"
+  ColAltern <- lapply(XPathAllCols, "[", "ColsAltern") %>% unlist %>% unique
   # alternative approach go for frequencies
   #XPathCandidates <- xpathes %>% c %>% table %>% data.frame
 
@@ -1535,7 +1538,7 @@ create_Addit_Extract <- function(extractPathes){
 # does not cover: follow-up process of html or only html
 baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys = NULL, extractPathes, reqMethod = "GET", body = NULL, headers = NULL, useHeader = FALSE){
 
-  xpath <- paste0("\tresponse %<>% read_html %>% html_nodes(xpath = '", extractPathes$xpath, "') %>% html_text")
+  xpath <- paste0("\tresponse %<>% read_html %>% html_nodes(xpath = '", extractPathes$xpath$xpath, "') %>% html_text")
 
   # todo: what if they are multiple extractions. then index differently
   indexes <- extractPathes$scriptJsonIndex[[1]]$JSONIdx
@@ -1862,25 +1865,34 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
   sivis$XPathes <- XPathes
   xp2 = extractPathes$xpath$ColAltern[1]
 
-  commonXPathRes <- CommonXPathData(
-    responseString = responseString,
-    xp1 = xp1,
-    xp2 = xp2,
-    extractPathes = extractPathes
-  )
+  if(is.null(extractPathes$xpath$ColAltern)){
+    moreCols <- NULL
+  }else{
+    commonXPathRes <- CommonXPathData(
+      responseString = responseString,
+      xp1 = xp1,
+      xp2 = xp2,
+      extractPathes = extractPathes
+    )
 
-  addCols <- commonXPathRes$addColsOutput
-  rootXpath <- commonXPathRes$rootXPath
+    addCols <- commonXPathRes$addColsOutput
+    rootXpath <- commonXPathRes$rootXPath
 
-  mat <- apply(addCols, 1, function(row) !is.na(row) & nchar(row))
-  idx1 <- apply(mat, 2, sum) %>% order(decreasing = TRUE)
-  missing <- mat[, idx1[1]] %>% magrittr::not() %>% which
-  idx2 <- apply(mat[missing, ,drop = FALSE], 2, sum) %>% order(decreasing = TRUE)
+    mat <- apply(addCols, 1, function(row) !is.na(row) & nchar(row))
+    idx1 <- apply(mat, 2, sum) %>% order(decreasing = TRUE)
+    missing <- mat[, idx1[1]] %>% magrittr::not() %>% which
+    idx2 <- apply(mat[missing, ,drop = FALSE], 2, sum) %>% order(decreasing = TRUE)
 
-  idx <- c(idx1[1], setdiff(idx2, idx1[1]))
-  addCols <- addCols[idx, ]
-  assign("addCols", addCols, envir = .GlobalEnv)
+    idx <- c(idx1[1], setdiff(idx2, idx1[1]))
+    addCols <- addCols[idx, ]
+    assign("addCols", addCols, envir = .GlobalEnv)
 
+    moreCols <- addColsOption(
+      rootXpath = rootXpath,
+      pageUrl = pageUrl,
+      selectedCol = 1 # initially only the column is selected, that was selected in the browser.
+    )
+  }
 
 
     #try(eval(parse(text = rcode), envir = .GlobalEnv))
@@ -1900,11 +1912,7 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
 
                      displayResults,
 
-                     addColsOption(
-                       rootXpath = rootXpath,
-                       pageUrl = pageUrl,
-                       selectedCol = 1 # initially only the column is selected, that was selected in the browser.
-                      ),
+                     moreCols,
 
                      '```'),
                    collapse = "\n"),
@@ -2350,7 +2358,7 @@ getXPath <- function(url, text = NULL, xpath = NULL, exact = FALSE, doc = NULL, 
     }
 
     glue("Did not find element for {text}.") %>% warning
-    return("")
+    return(NULL)
     xpath = ""
   }
 
@@ -2559,7 +2567,7 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
   if(rootPath != "/*") tags <- tags[-length(tags)] # & length(tags) > 1
   xpath <- paste(c("", tags[length(tags):1]), collapse = "/")
 
-  tags <- tagsOtherCols[[2]]
+  # tags <- tagsOtherCols[[2]]
   xpathOtherCols <- lapply(tagsOtherCols, FUN = function(tags){
     tags <- tags[magrittr::not(tags %in% c("text", ""))]
     xpCand <- paste(c("", tags[length(tags):1]), collapse = "/")
@@ -3231,14 +3239,17 @@ allJSONValues <- function(jsonContent, targetValues){
     if(baseCandidates %>% unlist %>% unique %>% length %>% magrittr::is_greater_than(1)){
       match <- NULL
     }else{
-      match <- baseCandidates %>% unlist %>% .[1]
+      match <- baseCandidates %>%
+        unlist %>%
+        .[1]
+
+      # example: https://cboe.wd1.myworkdayjobs.com/External_Career_CBOE
+      # todo: very dirty: collecting more examples
+      if(tail(match, 1) == targetKey) match %<>% head(n = -1)
     }
 
   }
 
-  # example: https://cboe.wd1.myworkdayjobs.com/External_Career_CBOE
-  # todo: very dirty: collecting more examples
-  if(tail(match, 1) == targetKey) match %<>% head(n = -1)
 
   # match <- parentElemNmsRaw %>% {ifelse(test = length(.) > 1, yes =  head(n = -1), no = .)} %>% c
   # roberts half: c("rh_job_search", "initial_results") fails if head(n = -1) is used
@@ -3377,8 +3388,9 @@ unpack_JSON <- function(response, targetKeys, base, baseFollow = NULL){
   rownames(res) <- NULL
 
   addLinks <- TRUE
-  if(addLinks){
-    res$Href <- sivis$browserOutput$links
+  links <- sivis$browserOutput$links
+  if(addLinks & nrow(res) == length(links)){
+    res$Href <- links
   }
 
   list(
