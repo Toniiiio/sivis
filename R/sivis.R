@@ -1848,19 +1848,19 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
                             getFinishTemplate
   ), collapse = "\n")
 
-    if(testEval){
-      success <- tryCatch(
-        eval(parse(text = request_code)),
-        error = function(e) return(FALSE)
-      )
-      return(TRUE)
-    }
+  if(testEval){
+    success <- tryCatch(
+      eval(parse(text = request_code)),
+      error = function(e) return(FALSE)
+    )
+    return(TRUE)
+  }
 
 
   # doc <- responseString %>% read_html %>% html_nodes(xpath = extractPathes$xpath$ColAltern[1]) %>% html_nodes(xpath = "..")
   xp1 = XPathes
   sivis$XPathes <- XPathes
-  xp2 = extractPathes$xpath$ColAltern[2]
+  xp2 = extractPathes$xpath$ColAltern[1]
 
   commonXPathRes <- CommonXPathData(
     responseString = responseString,
@@ -2022,6 +2022,7 @@ commonXPathes <- function(doc, xp1, xp2){
 
   tagsSame <- identical(nodes1[[1]], nodes2[[1]])
   while(!tagsSame){
+    print(nodes2)
     nodes1 <- c(nodes1, tail(nodes1, 1)[[1]] %>% html_nodes(xpath = ".."))
     nodes2 <- c(nodes2, tail(nodes2, 1)[[1]] %>% html_nodes(xpath = ".."))
     mat <- matrix(NA, nrow = length(nodes1), ncol = length(nodes2))
@@ -2034,8 +2035,9 @@ commonXPathes <- function(doc, xp1, xp2){
     tagsSame <- mat %>% sum
   }
   idx <- apply(mat, 1, which) %>% unlist %>% min
+  allText <- html_nodes(x = doc, xpath = xp2) %>% html_text()
   commonXPath <- nodes1[[idx]] %>%
-    getXPathByTag(doc = doc) %$%
+    getXPathByTag(doc = doc, allText = allText) %$%
     xpath
   commonXPath
 }
@@ -2043,8 +2045,17 @@ commonXPathes <- function(doc, xp1, xp2){
 CommonXPathData <- function(responseString, xp1, xp2, extractPathes){
 
   doc <- responseString %>% read_html
-  rootPath = commonXPathes(doc, xp1, xp2)
 
+  if(!length(html_node(x = doc, xpath = xp1))) stop(glue("Found an invalid XPath: {xp1} while attempting to find a commonXPath."))
+  if(!length(html_node(x = doc, xpath = xp2))) stop(glue("Found an invalid XPath: {xp2} while attempting to find a commonXPath."))
+
+  rootPath = commonXPathes(
+    doc = doc,
+    xp1 = xp1,
+    xp2 = xp2
+  )
+
+  # XPath <- extractPathes$xpath$ColAltern[4]
   addCols <- lapply(
     X = c(xp1, extractPathes$xpath$ColAltern),
     FUN = findTextGivenRoot,
@@ -2074,11 +2085,12 @@ findTextGivenRoot <- function(rootPath, XPath, doc){
   if(!length(allText)) return()
 
   xpCand <- getXPathByTag(
-    tag = html_node(x = doc, xpath = XPath),
+    tag = html_nodes(x = doc, xpath = XPath)[1],
     rootPath = rootPath,
     allText = allText,
     doc = doc
   )$xpath
+
   if(substr(xpCand, 1, 1) == "/") xpCand %<>% substr(start = 2, stop = nchar(.))
 
   nodes <- html_nodes(x = doc, xpath = rootPath)
@@ -2452,7 +2464,10 @@ getXPathByText <- function(text, doc, exact = FALSE, attr = NULL, byIndex = FALS
 }
 
 #tag <- tags[[1]]
+byIndex = TRUE
+rootPath = "/*"
 getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allText = NULL, doc, rootPath = "/*"){
+
   rootTags <- doc %>% html_nodes(xpath = rootPath)
 
   tagName <- ""
@@ -2502,6 +2517,8 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
         matches <- rep(0, length(childrenMatchTag))
         # dont need to set index if there is only one element with same tag type.
         # for consistency with chrome output.
+
+        #if(length(iterTag) > 1) iterTag <- list(iterTag) # need to wrap in list so that i can find it children of its parents, see below.
         if(length(matches) > 1){
           for(nr in 1:length(childrenMatchTag)){
             matches[nr] <- identical(childrenMatchTag[nr], iterTag)
@@ -2519,13 +2536,13 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
         XPathFound <- FALSE
       }else{
         # need this if it has two elements. need to better understand this.
-
         XPathFound <- iterTag %in% rootTags %>% sum
       }
     }
 
     if(length(matches) > 1 & hasTarget){
-      tagsOtherCols <- lapply(tagNameAltern, function(tag) c(tags, tag))
+      print("here")
+      tagsOtherCols <- tagNameAltern #lapply(tagNameAltern, function(tag) c(tags, tag))
     }else{
       if(!is.null(tagsOtherCols)){
         tagsOtherCols <- lapply(tagsOtherCols, function(tag) c(tag, tagNameInsert))
@@ -2534,18 +2551,46 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
 
     tags <- c(tags, tagNameInsert)
     iterTag <- iterTag %>% html_nodes(xpath = "..")
-    #XPathFound <- !length(iterTag) & XPathFound
   }
 
   #todo: sometimes a tag "text" comes up, that i dont want. However, if i debug nike jobsite
   # tag script does not come up, but i want it.
   tags <- tags[magrittr::not(tags %in% c("text", ""))]
-  if(rootPath != "/*") tags <- tags[-length(tags)]
+  if(rootPath != "/*") tags <- tags[-length(tags)] # & length(tags) > 1
   xpath <- paste(c("", tags[length(tags):1]), collapse = "/")
 
+  tags <- tagsOtherCols[[2]]
   xpathOtherCols <- lapply(tagsOtherCols, FUN = function(tags){
     tags <- tags[magrittr::not(tags %in% c("text", ""))]
-    paste(c("", tags[length(tags):1]), collapse = "/")
+    xpCand <- paste(c("", tags[length(tags):1]), collapse = "/")
+
+    hasTextChild <- TRUE
+    nr <- 1
+    while(hasTextChild){
+      child <- xpCand %>%
+        html_node(x = doc, xpath = .) %>%
+        html_nodes(xpath = "child::*")
+
+      hasTextChild <- length(child)
+      if(hasTextChild){
+        hasText <- nchar(child %>% html_text)
+          #grep(pattern = child %>% html_text, x = xpCand %>% html_node(x = doc, xpath = .) %>% html_text) %>% length
+          #if(!nchar(child %>% html_text)) hasText <- FALSE
+        if(hasText){
+          xpCand <- child %>% html_name %>% {paste(c(xpCand, "/", .), collapse = "")}
+        }else{
+          hasTextChild <- FALSE
+        }
+      }
+      nr <- nr + 1
+    }
+    # todo very dirty - remove first element, because it is already in commonXPath, but i need it as a start point
+    if(rootPath != "/*"){
+      print(xpCand)
+      xpCand %<>% strsplit(split = "/") %>% unlist %>% .[-2] %>% paste(collapse = "/")
+      print(xpCand)
+    }
+    xpCand
   })
 
   return(
@@ -2630,32 +2675,6 @@ getXPathDeprecated <- function(url, text = NULL, xpath = NULL, exact = FALSE, do
   }
   xpath
 }
-
-
-getXPathByTagDeprecated <- function(tag, text, exact = FALSE){
-  tagName <- ""
-  tags <- c()
-
-  if(!length(tag)){
-    xpath = ""
-  }else{
-    if(length(tag) > 1){
-      tagNames <- sapply(tag, html_name)
-      match <- which(tagNames != "script")
-      if(!length(match)) match <- 1
-      tag <- tag[match[1]]
-    }
-    while(tagName != "html"){
-      tagName <- tag %>% html_name()
-      tags <- c(tags, tagName)
-      tag <- tag %>% html_nodes(xpath = "..")
-    }
-
-    xpath <- paste(c("", tags[length(tags):1]), collapse ="/")
-  }
-  xpath
-}
-
 
 getScrapeInfo <- function(browserOutputRaw = readClipboard(), toLower = TRUE){
   splitted <- strsplit(
