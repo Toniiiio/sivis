@@ -1931,25 +1931,25 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
   save(addCols, file = paste0("addCols_", nr, ".RData"))
   rootXpath <- commonXPathRes$rootXPath
 
-  mat <- apply(addCols, 1, function(row) !is.na(row) & nchar(row))
-  idx1 <- apply(mat, 2, sum) %>% order(decreasing = TRUE)
-  missing <- mat[, idx1[1]] %>% magrittr::not() %>% which
-  idx2 <- apply(mat[missing, ,drop = FALSE], 2, sum) %>% order(decreasing = TRUE)
+  if(ncol(addCols)){
+    mat <- apply(addCols, 1, function(row) !is.na(row) & nchar(row))
+    idx1 <- apply(mat, 2, sum) %>% order(decreasing = TRUE)
+    missing <- mat[, idx1[1]] %>% magrittr::not() %>% which
+    idx2 <- apply(mat[missing, ,drop = FALSE], 2, sum) %>% order(decreasing = TRUE)
 
-  idx <- c(idx1[1], setdiff(idx2, idx1[1]))
-  addCols <- addCols[idx, ]
-  assign("addCols", addCols, envir = .GlobalEnv)
+    idx <- c(idx1[1], setdiff(idx2, idx1[1]))
+    addCols <- addCols[idx, ]
+    assign("addCols", addCols, envir = .GlobalEnv)
 
-  moreCols <- addColsOption(
-    addCols = addCols,
-    rootXpath = rootXpath,
-    pageUrl = pageUrl,
-    selectedCol = 1 # initially only the column is selected, that was selected in the browser.
-  )
-  # }
-
-
-  #try(eval(parse(text = rcode), envir = .GlobalEnv))
+    moreCols <- addColsOption(
+      addCols = addCols,
+      rootXpath = rootXpath,
+      pageUrl = pageUrl,
+      selectedCol = 1 # initially only the column is selected, that was selected in the browser.
+    )
+  }else{
+    moreCols <- "Did not detect any candidates for additional columns/variables."
+  }
 
   writeLines(
     text = paste(c('---',
