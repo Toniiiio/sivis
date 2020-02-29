@@ -454,7 +454,7 @@ create_sivis <- function(cbData){
 
 if(FALSE){
 
-  nr <<- 28
+  nr <<- 9
   # 59 und 8, 9?? raus
   for(nr in 18:27){
 
@@ -1243,55 +1243,6 @@ addXPathFromShiny <- function(XPathes, source = "shiny"){
 }
 
 
-addXPath_Deprecated <- function(){
-  XpathNr <- length(sivis$XPathes)
-  browserOutput <- readClipboard() %>% fromJSON
-  browserOutput$selectedText <- trimws(gsub(pattern = "\n", replacement = "", x = browserOutput$selectedText))
-
-
-  if(!length(XpathNr)){
-    print("Run InsertData() Function first!")
-    return()
-  }
-
-  xpathRaw <- ""
-  XPathIter <- 1
-  candidates <- sivis$doc %>%
-    html_nodes(xpath = browserOutput$clipBoardText$XPath) %>%
-    html_text %>%
-    gsub(pattern = "\n|\t", replacement = "") %>%
-    trimws
-  matches <- candidates %in% browserOutput$clipBoardText$selectedText
-  if(length(matches)) matches <- 0
-  if(sum(matches) / length(matches) > 0.4){
-    xpathRaw <- browserOutput$clipBoardText$XPath
-  }else{
-    while(xpathRaw  == ""){
-      xpathRaw <- getXPath(
-        url = browserOutput$clipBoardText$pageUrl,
-        text = browserOutput$clipBoardText$selectedText[XPathIter],
-        exact = FALSE,
-        doc = sivis$doc
-      )
-      XPathIter <- XPathIter + 1
-      if(XPathIter > length(browserOutput$selectedText)) stop("didnt find a match for xpath")
-    }
-  }
-
-  #matchIdxRaw <- sapply(targetValues, matchStrings, candidates = candidates)
-
-  XPath <- data.frame(xpathRaw)
-  rstudioapi::documentSave(id = "Notebook_scraping.Rmd")
-  existingXPathes <- getXPathFromScript()
-  sivis$XPathes <- c(existingXPathes, paste0("XPath", length(existingXPathes) + 1, " = \"", unname(XPath), "\""))
-  # sivis$XPathes <- cbind(sivis$XPathes, XPath)
-
-  if(is.null(sivis$urlGen)){
-    createDocument(browserOutput = browserOutput, OneXPathOnly = FALSE)
-  }else{
-    GetLink(newLink = FALSE)
-  }
-}
 
 # responseString <- "asdd <a>"
 # responseString <- "asd {a:b, c:d} asdasd {a:b, c:e}"
@@ -1490,62 +1441,6 @@ checkForJSON <- function(jsonRegex, responseString, targetValues, reqSingleQuote
   )
 }
 
-
-
-insertData <- function(browserOutput = cbData, maxCheck = 5){
-  if(is.null(browserOutput)) browserOutput <- readClipboard() %>% fromJSON
-
-  XPathNr <- 1
-  xpath <- ""
-
-
-  #todo: hella: https://hella-jobs.dvinci.de/cgi-bin/appl/selfservice.pl?action=search;page=2
-  # make direct match with xpath from sivis
-  # xx <- doc %>% html_nodes(xpath = browserOutput$XPath) %>% html_text
-
-  if(is.null(browserOutput$selectedText)) stop("no selected text")
-  text = browserOutput$selectedText[1]
-  allText = browserOutput$selectedText[1:maxCheck]
-  url <- browserOutput$pageUrl
-  exact = FALSE
-  doc = sivis$doc
-  attr = NULL
-  byIndex = TRUE
-
-  XPathCandidates <- sapply(
-    X = allText,
-    FUN = getXPath,
-    allText = allText,
-    url = url,
-    exact = exact,
-    doc = doc,
-    attr = attr, #"class"
-    byIndex = byIndex
-  )
-  XPathCandidates %<>% unlist %>% unique
-
-  # alternative approach go for frequencies
-  #XPathCandidates <- xpathes %>% c %>% table %>% data.frame
-
-  #if(is.null(XPathCandidates))
-  xpath <- XPathCandidates %>%
-    adist(y = browserOutput$XPath) %>%
-    data.frame(dist = ., xpathes = XPathCandidates) %>%
-    filter(dist == min(dist)) %>%
-    select(2) %>%
-    unname %>%
-    unique
-
-
-  sivis$XPathes <- paste0("XPath1 = \"", xpath, "\"")
-  sivis$XPathes
-  sivis$browserOutput <- browserOutput
-  OneXPathOnly <- length(sivis$XPathes) == 1
-  sivis$urlGen <- NULL
-  createDocument(browserOutput = browserOutput, extractPathes = extractPathes)
-  #assign("scrapedData", browserOutput$selectedText, envir = .GlobalEnv)
-}
-
 # extractPath <- extractPathes[2:length(extractPathes)]
 create_Addit_Extract <- function(extractPathes){
   if(!length(extractPathes)) return(NULL)
@@ -1636,6 +1531,7 @@ baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys = NULL, extrac
   hdr <- switch(is.null(headers) + 1, paste0(', add_headers(.headers = scraper$headers)'), "")
   bdy <- switch(is.null(body) + 1, paste0(', body = scraper$body'), "")
 
+  # todo info in #so
   # https://www.nisource.com/careers/job-search benötigt double quotes im body
   # bdyQuote <- ifelse(test = grepl(x = body, pattern = '"'), yes = "'", no = '"')
   # scrBdy <- switch(is.null(body) + 1, paste0(',\n\tbody = ', bdyQuote, body, bdyQuote), "")
@@ -1893,27 +1789,21 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
     return(TRUE)
   }
 
-
-  # doc <- responseString %>% read_html %>% html_nodes(xpath = extractPathes$xpath$ColAltern[1]) %>% html_nodes(xpath = "..")
   xp1 = XPathes
   sivis$XPathes <- XPathes
-  xp2 = extractPathes$xpath$ColAltern
+  # xp2 = extractPathes$xpath$ColAltern
 
-  # if(is.null(extractPathes$xpath$ColAltern)){
-  #   moreCols <- NULL
-  # }else{
   commonXPathRes <- CommonXPathData(
     responseString = responseString,
     xp1 = xp1,
-    xp2 = xp2,
     extractPathes = extractPathes
   )
 
   addCols <- commonXPathRes$addColsOutput %>%
     do.call(what = cbind) %>%
     .[, colSums(is.na(.)) != nrow(.)] %>% # remove NA rows
-    .[, !duplicated(., MARGIN = 2)] %>%  # duplicate cols
-    .[complete.cases(.), ] # and NA cols
+    .[, !duplicated(., MARGIN = 2)] %>%  # remove duplicate cols
+    .[complete.cases(.), ] # and remove NA cols
 
   # make the order that columns which have only same values appear at last, because they might contain only title
   # of other columns or other irrelevant data
@@ -1922,24 +1812,34 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
   addCols <- addCols[, order]
 
   # config parameter - remove empty character columns
-  keep <- addCols %>%
+  nonEmptyCol <- addCols %>%
     apply(MARGIN = 2, FUN = function(col) col %>% gsub(pattern = "\n|\t", replacement = "") %>% nchar %>% sum %>% magrittr::is_greater_than(0))
-  addCols <- addCols[, keep]
+  addCols <- addCols[, nonEmptyCol]
 
-  colnames(addCols)
-
-  save(addCols, file = paste0("addCols_", nr, ".RData"))
+  save(addCols, file = paste0("addCols_", nr, ".RData")) # for batch testing
   rootXpath <- commonXPathRes$rootXPath
 
-  if(ncol(addCols)){
+  additionColExist <- ncol(addCols)
+  if(additionColExist){
     mat <- apply(addCols, 1, function(row) !is.na(row) & nchar(row))
     idx1 <- apply(mat, 2, sum) %>% order(decreasing = TRUE)
+
     missing <- mat[, idx1[1]] %>% magrittr::not() %>% which
     idx2 <- apply(mat[missing, ,drop = FALSE], 2, sum) %>% order(decreasing = TRUE)
 
     idx <- c(idx1[1], setdiff(idx2, idx1[1]))
     addCols <- addCols[idx, ]
-    assign("addCols", addCols, envir = .GlobalEnv)
+    assign("addCols", addCols, envir = .GlobalEnv) # need the variable accessible in scraping script, to make selections from shiny
+
+    # config parameter
+    selectedCol <- 1 # initially only the column is selected, that was selected in the browser.
+
+    # mostly more columns will be selected than not selected by the user-
+    # However, if all columns will be selected at the beginning the user, initially,
+    # might not realise that columns cann be selected
+    selectedCol <- 1:ncol(addCols)
+
+
 
     moreCols <- addColsOption(
       addCols = addCols,
@@ -2106,26 +2006,20 @@ commonXPathes <- function(doc, xp1, xp2){
   commonXPath
 }
 
-CommonXPathData <- function(responseString, xp1, xp2, extractPathes){
+CommonXPathData <- function(responseString, xp1, extractPathes){
 
   doc <- responseString %>% read_html
 
-  # if(!length(html_node(x = doc, xpath = xp1))) stop(glue("Found an invalid XPath: {xp1} while attempting to find a commonXPath."))
-  # if(!length(html_node(x = doc, xpath = xp2))) stop(glue("Found an invalid XPath: {xp2} while attempting to find a commonXPath."))
-
-  # rootPath = commonXPathes(
-  #   doc = doc,
-  #   xp1 = xp1,
-  #   xp2 = xp2
-  # )
+  if(!length(html_node(x = doc, xpath = xp1))) stop(glue("Found an invalid XPath: {xp1} while attempting to find a commonXPath."))
+  if(!length(html_node(x = doc, xpath = xp2))) stop(glue("Found an invalid XPath: {xp2} while attempting to find a commonXPath."))
 
   tags <- doc %>% html_nodes(xpath = xp1)
   leafPathes <- getLeafPathes(doc, tags)
 
   xpathes <- c(xp1, extractPathes$xpath$ColAltern)
+
   # xpath <- xpathes[25]
   addXP <- sapply(xpathes, FUN = function(xpath){
-    print(1)
     tags <- html_nodes(x = doc, xpath = xpath)
     allText <- tags %>% html_text
     xp <- getXPathByTag(
@@ -2389,13 +2283,6 @@ getXPathFromScript <- function(){
 }
 
 
-
-
-
-
-library(glue)
-library(rvest)
-
 extractJobLink <- function(hrefAttrText, baseUrl){
   firstHrefPart <- strsplit(hrefAttrText, ";")[[1]][1]
   hasJavascript <- grep(pattern = "javascript:", x = firstHrefPart)
@@ -2518,22 +2405,6 @@ checkXPath <- function(tagNameInsert, tags, AmtElemBefore = 1e6, XPathClass = ""
   )
 }
 
-# vec <- letters[1:4]
-# vec <- glue("contains(@class, '{vec}')")
-#
-# XPClasses <- sapply(seq_along(vec), function(x) combn(vec, x, FUN = paste, collapse = " and ")) %>%
-#   unlist %>%
-#   paste0("[", ., "]")
-#
-# # doc <- read_html("test.html")
-# # tags <- c()
-# # tagNameInsert <- "a"
-# lapply(
-#   X = XPClasses,
-#   FUN = checkXPath,
-#   tagNameInsert = tagNameInsert,
-#   tags = tags
-# )
 
 # text <- "Anlagenmechaniker"
 # doc <- contInit %>% read_html
@@ -2618,18 +2489,7 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
       hasAllChildren <- percentageFound > 0.7
       if(is.null(allText)) hasAllChildren <- TRUE
 
-      # hasAllChildren <- sapply(allText, grepl, x = childrenMatchText, fixed = TRUE) %>%
-      #   matrix(nrow = length(allText)) %>%
-      #   rowSums %>%
-      #   which.max
       firstRound <- is.null(xpElems)
-
-      # notInAllTags <- sapply(allText, FUN = grepl, x = childrenMatchText) %>%
-      #   as.data.frame %>%
-      #   rowSums() %>%
-      #   magrittr::is_greater_than(1) %>%
-      #   {sum(.)/length(.)} %>%
-      #   magrittr::is_less_than(0.6)
 
       #  | notInAllTags
       # todo: do i really measure this correctly? Example: Blackrock
@@ -2751,17 +2611,6 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
           tagName
         })
 
-        # # refactor
-        # addTagName <- sapply(names(xx), function(x){
-        #   if(!nchar(x)) return("")
-        #   if(xx[x] > 1){
-        #     out <- glue("{x}[{1:xx[x]}]")
-        #   }else{
-        #     out <- glue("{x}")
-        #   }
-        #   return(out)
-        # })
-
         nr <- 1
         out <- list()
         for(nr in 1:length(xpCand)){
@@ -2788,6 +2637,24 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
     )
   )
 }
+
+
+# vec <- letters[1:4]
+# vec <- glue("contains(@class, '{vec}')")
+#
+# XPClasses <- sapply(seq_along(vec), function(x) combn(vec, x, FUN = paste, collapse = " and ")) %>%
+#   unlist %>%
+#   paste0("[", ., "]")
+#
+# # doc <- read_html("test.html")
+# # tags <- c()
+# # tagNameInsert <- "a"
+# lapply(
+#   X = XPClasses,
+#   FUN = checkXPath,
+#   tagNameInsert = tagNameInsert,
+#   tags = tags
+# )
 
 
 # if(!is.null(attr)){
@@ -2868,15 +2735,6 @@ getLeafPathes <- function(doc, tags){
       getOtherCols = FALSE
     )$xpath
   }
-  # leafPathes <- sapply(leaves, FUN = function(leaf){
-  #   print(leaf)
-  #   getXPathByTag(
-  #     tag = leaf,
-  #     rootPath = rootPath,
-  #     doc = doc,
-  #     getOtherCols = FALSE
-  #   )$xpath
-  # })
 
   subPathes <- leafPathes %>%
     unlist %>%
@@ -2892,42 +2750,6 @@ getLeafPathes <- function(doc, tags){
 
 
 
-getXPathDeprecated <- function(url, text = NULL, xpath = NULL, exact = FALSE, doc = NULL){
-  tagName <- ""
-  tags <- c()
-  if(!is.null(text)){
-    text <- gsub(pattern = " |\n|\t", replacement = "", tolower(text))
-    if(exact){
-      xpath <- paste0("//*[text() = '", text,"']")
-    }else{
-      xpath <- paste0("//*[text()[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ', 'abcdefghijklmnopqrstuvwxyz'), '",
-                      text, "')]]")
-    }
-  }
-
-  if(is.null(doc)) doc <- read_html(x = url)
-  tag <- doc %>% html_nodes(xpath = xpath)
-  #tag[1] %>% html_text()
-  if(!length(tag)){
-    xpath = ""
-    #showHtmlPage(doc)
-  }else{
-    if(length(tag) > 1){
-      tagNames <- sapply(tag, html_name)
-      match <- which(tagNames != "script")
-      if(!length(match)) match <- 1
-      tag <- tag[match[1]]
-    }
-    while(tagName != "html"){
-      tagName <- tag %>% html_name()
-      tags <- c(tags, tagName)
-      tag <- tag %>% html_nodes(xpath = "..")
-    }
-
-    xpath <- paste(c("", tags[length(tags):1]), collapse ="/")
-  }
-  xpath
-}
 
 getScrapeInfo <- function(browserOutputRaw = readClipboard(), toLower = TRUE){
   splitted <- strsplit(
