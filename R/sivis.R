@@ -2,24 +2,73 @@
 # - nur Textdaten
 # - wenn mehrere Daten/Seiten, auf 2-X Seite gehen, weil dann alle Parameter da sind.
 
+#https://www.teleflex.com/emea/de/careers/index.html
+#todo:leafpathes
+"https://www.royalcareersatsea.com/jobs/results/page:2"
+#https://lifeatexpediagroup.com/jobs/?&page=2
+
+# aufbröseln von c() bei jsons?
+#https://pc00.paycomonline.com/v4/ats/web.php/jobs?&clientkey=A38173AIE92874820ALRE20847CDE927PIW76526#
+# https://edel.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/requisitions
+#https://kelloggs.taleo.net/careersection/2/jobsearch.ftl?lang=en&alt=1&_ga=2.84979033.1745910250.1583623002-1023856734.1583623002#
+# dm !! complicated in request
+##https://sjobs.brassring.com/TGnewUI/Search/Home/Home?partnerid=25678&siteid=5275#keyWordSearch=&locationSearch=
+
+#missing addcols`
+#https://careers.questdiagnostics.com/en-US/search?pagenumber=2
+#https://careers.leidos.com/search/jobs/in?page=2#
+#https://jobs.fcx.com/search/?searchby=location&createNewAlert=false&q=&locationsearch=&geolocation=
+#https://kcsouthern.silkroad.com/epostings/index.cfm?fuseaction=app.jobsearch
+#https://careers.dovercorporation.com/search/?q=&sortColumn=referencedate&sortDirection=desc&startrow=25
+#https://careers.key.com/en-US/search?pagenumber=2
+# https://careers.firstrepublic.com/index.php?keyword=&search-openings=Search+Openings#
+# http://www.bestbuy-jobs.com/search/?sort=job_title&pg=6
+
+
+######### pagechange in url
+#https://careers.leidos.com/search/jobs/in?page=2#
+#https://careers.questdiagnostics.com/en-US/search?pagenumber=2
+#"https://www.royalcareersatsea.com/jobs/results/page:2"
+#https://lifeatexpediagroup.com/jobs/?&page=2
+
+
+####access denied
+
+
+
+####loads popup text only or wrong request? --> wrong request
+#https://www.governmentjobs.com/careers/cincinnati?page=2
+
+
+
+##### false candidates need classes or check children. but cant
+
+
 
 # https://www.aldi-nord.de/angebote/aktion-mo-03-02.html
 # https://www.rewe.de/angebote/hamburg/540724/rewe-markt-waldweg-43/
+
+
+## custom seperator
+#https://evergy.taleo.net/careersection/evergy_external_career_section/jobsearch.ftl?lang=en&portal=8360483464
 
 
 # Anforderungen, Beispiele für Funktionen sammeln.
 # substr321 entsprechend umbenennen umschreiben
 # Automatisches testen für die kreierung von den scrapern bauen.
 
+# invalid access 403: https://careers.westerndigital.com/jobs/search/4107581/page2
+# empty site: https://recruiting.adp.com/srccar/public/RTI.home?c=1214601&d=ExternalCareerSite
 
 # Notation:
 # Initial scrape: Data collection for building the sivis scraping code.
 # Scheduled scrape: Automatic scrape, that will be done based on the code created by sivis80.
 
 ## General challenges:
-# Mixed (two) sources: First page html, second page xhr request. Example: https://jobs.disneycareers.com/search-jobs
+# Mixed requests(two) sources: First page html, second page xhr request. Example: https://jobs.disneycareers.com/search-jobs
 # https://jobs.gartner.com/search-jobs
 #https://newscorp.com/careers/search?s=?
+#https://vulcanmat.recsolu.com/job_boards/DSwKIMPhsVjPaaKajSs8hQ
 
 ###might not fully work
 ##peoples united, wrong extraction - can not work - or have to index in neighbour column steht jobtitle, https://sjobs.brassring.com/TGnewUI/Search/Home/Home?partnerid=25679&siteid=5313#keyWordSearch=&locationSearch=
@@ -28,6 +77,10 @@
 #### wrong server result - incomplete json???
 # https://henryschein.taleo.net/careersection/hsi1/moresearch.ftl?lang=en
 #
+
+###to much selected: deselect things
+# https://kcsouthern.silkroad.com/epostings/index.cfm?fuseaction=app.jobsearch
+
 
 # todo: inpage source reparieren und von get und post untersuchungen trennen: {"identifier":"SivisCBDataIdent","pageUrl":"https://jobs.fastretailing.com/search/?q=&sortColumn=referencedate&sortDirection=desc&startrow=50","clickType":"contextmenu","selectedText":["\n            Mcclean, VA, US\n            \n        "],"links":[null],"XPath":"/html/body/div[2]/div[2]/div/div[4]/table/tbody/tr[1]/td[3]/span","XPathClassRaw":"/html[class = 'html5']/body[class = 'coreCSB search-page body']/div[class = 'outerShell']/div[class = 'innerShell']/div[class = 'content']/div[class = 'searchResultsShell']/table[class = 'searchResults full']/tbody/tr[class = 'dbOutputRow2 jobgrid-row']/td[class = 'colLocation']/span[class = 'jobLocation']","getUrl":"https://jobs.fastretailing.com/search/?q=&sortColumn=referencedate&sortDirection=desc&startrow=50","postUrl":"","postBody":{"raw":"[object Object]"},"InPageSource":true}
 # todo: https://www.clariant.com/de/Careers/Job-Openings/Global-Job-Openings
@@ -177,6 +230,7 @@ print <- function(x, max = 500){
 # https://www.aldi-nord.de/angebote/aktion-mo-17-02.html`
 # https://www.aldi-nord.de/produkte/neu-im-sortiment.html
 # https://www.aldi-nord.de/produkte/neu-im-sortiment.html
+# https://jobs.cardinalhealth.com/search/searchjobs
 
 cleaning <- TRUE
 if(cleaning){
@@ -361,15 +415,16 @@ create_sivis <- function(cbData){
   headerContent <-  ifelse(test = is.null(withHeaders), yes = "", no = withHeaders %>% content(type = "text"))
   noHeaderContent <-  ifelse(test = is.null(noHeader), yes = "", no = noHeader  %>% content(type = "text"))
 
+  # config parameter
   withHeaderFailed <- sapply(
-    X = targetValues %>% gsub(pattern = "\n|\t", replacement = ""),
+    X = targetValues %>% gsub(pattern = "\n|\t", replacement = "") %>% trimws,
     FUN = grepl,
     fixed = TRUE,
     x = headerContent,
     USE.NAMES = FALSE
   ) %>%
     {sum(.) / length(.)} %>%
-    magrittr::is_less_than(0.6)
+    magrittr::is_less_than(0.4)
 
   # config parameter
   # funny exception that it works without headers only for https://www.zeit.de/index.
@@ -468,6 +523,8 @@ if(FALSE){
     #
     # fl <-  "httpscareerskohlscomsearchresultsfrom12s1.RData"
     #
+    nr <<- 99
+    fl <- "httpsf5comdecareerssearchjobspage2.RData"
 
     load(file = paste0("R/fromWeb/", fl))
     if(sivis$useHeader %>% is.null) sivis$useHeader <- FALSE
@@ -478,7 +535,7 @@ if(FALSE){
     #sivis[["fileName"]] <- 1#paste0("test", nr, ".Rmd")
     testRun <- FALSE
     testEval <- FALSE
-    #use_sivis(sivis, testRun = testRun, testEval = testEval)
+    use_sivis(sivis, testRun = testRun, testEval = testEval)
     tryCatch(
       expr = use_sivis(sivis, testRun = testRun, testEval = testEval),
       error = function(e) print(e)
@@ -498,6 +555,11 @@ if(FALSE){
 ## fromChrome from chrome new scraper newscraper
 createScraper <- function(){
   nr <<- 19
+
+  host <<- "192.168.1.4"
+  #host <- "77.182.65.66"
+  # host <<- "10.22.20.120"
+
   sivis$cbData <- readClipboard() %>% fromJSON
   sivis$cbData$clipBoardText$selectedText %>% head
   sivis$cbData$request$request$url
@@ -551,13 +613,13 @@ use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE, allow){
   status <- getRes %>% status_code()
   if(status != 200) glue("status code of server response is: {status}") %>% warning
 
-  #### fl <-  "https://www.rewe.de/angebote/hamburg/540724/rewe-markt-waldweg-43/" example for nun replacement of \n
+  #### fl <-  "https://www.rewe.de/angebote/hamburg/540724/rewe-markt-waldweg-43/" example for non replacement of \n
   targetValues <- sivis$browserOutput$selectedText %>%  trimws #gsub(pattern = "\n", replacement = "") %>%
 
   extract_meta$responseString <- getRes %>% content(type = "text")
   if(is.na(extract_meta$responseString)) stop("response body from server is not available.")
   if(!nchar(extract_meta$responseString)) stop("response body from server seems to be empty.")
-  extract_meta$responseString %>% showHtmlPage()
+  #extract_meta$responseString %>% showHtmlPage()
 
   ## config parameter - max check
   targetValues <- targetValues[1:min(length(targetValues), 10)]
@@ -590,6 +652,7 @@ use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE, allow){
   responseToText <- unescape_html2(extract_meta$responseString)
   # responseToText <- gsub(responseToText, pattern = "\/", replacement = "/", fixed = TRUE)
 
+  if(!nchar(targetValues)) stop("targetValues are empty")
   newTargetValues <- sapply(targetValues, FUN = function(targetValue){
     aregexec(
       pattern = targetValue,
@@ -709,6 +772,12 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
   if(docType == "application/vnd.oracle.adf.resourcecollection+json") docType <- "application/json"
   if(docType == "application/xhtml+xml") docType <- "text/html"
 
+  if(responseString %>% jsonlite::validate()){
+    # text/plain -> is jsonobject for https://akamaijobs.referrals.selectminds.com/jobs/search/5145592/page2
+    # decided for generic json check
+    docType <- "application/json"
+  }
+
   if(docType != "application/json" & grepl(pattern = "application", x = docType) & grepl(pattern = "json", x = docType)){
     warning(glue("DocType: {docType} seems to be of type 'application/json'. Attempting the corresponding extraction method.
                   Please file an issue to add this document type to the list with an indication whether the scrape was successful."))
@@ -721,7 +790,7 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
   }
 
   if(magrittr::not(docType %in% c("text/html", "application/json", "script/json"))){
-    stop(glue("For docType: '{docType}' there is no extraction method, yet. Please file an issue."))
+    stop(glue("For docType: '{docType}' there is no extraction method available yet. Please file an issue."))
   }
 
   docType
@@ -766,7 +835,6 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
         )
       }
 
-      rstudioapi::documentSave(id = "Notebook_scraping.Rmd") # does this work??
       assign(x = "neighbours", value = sivis$neighbours, envir = .GlobalEnv)
       assign(x = "extractPathes", value = extractPathes, envir = .GlobalEnv)
 
@@ -848,12 +916,12 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
     names(extractPathes)[length(extractPathes)] <- "xpath"
 
     if(all(htmlResult$allFound)){
+
       if(testRun & !testEval){
         return(
           list(allFound = TRUE)
         )
       }
-      getRes = NULL
 
       testEval <- createDocument(
         pageUrl = pageUrl,
@@ -865,6 +933,7 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
         testEval = testEval,
         useHeader = useHeader
       )
+
       return(
         list(
           testEval = testEval
@@ -959,7 +1028,8 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
     unname %>%
     unique %>%
     unlist %>%
-    .[1]
+    .[1] %>%
+    paste0(., "[not(descendant::*)]")
 
   xpath
 
@@ -1010,7 +1080,7 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
 
 # For the scheduled scrape i want to extract by index not by targetvalue, since the target values wll change.
 # For the initial scrape i want to extract by target value. The index value i can not know so far.
-JSON_from_String <- function(str, regexStr = "\\{(?:[^{}]+|(?R))*?\\}", reqSingleQuote = FALSE, targetValues = NULL, indexNr = NULL){
+JSON_from_String <- function(str, regexStr = c(jsonObject = "\\{(?:[^{}]+|(?R))*?\\}"), reqSingleQuote = FALSE, targetValues = NULL, indexNr = NULL){
   # httpsjobsapigooglemcloudioapijobsearchcallbackjobsCallbackpageSize10offset0companyNamecompanies2Fc3f8
   #### recursion limit reached in PCRE for element 1
 
@@ -1119,12 +1189,14 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list(), r
   ####################### INDEXING ########################
   # Indexing can be needed in both JSON arrays and JSON objects
   ### limits of indexing: httpssjobsbrassringcomTgNewUISearchAjaxMatchedJobs.RData"
-  ### cant find right pattern manually?
+  ### cant even find right pattern manually there?
 
   # add potential indexing of resultValues
-  targetSeq <- resultValues %in% targetValues %>% which
 
-  amtMatches <- colSums(data.frame(sapply(targetValues, FUN = "==", resultValues)), na.rm = TRUE)
+  # take all selected text not the limited amount (limitation is done due to performance issues) - here are no significant performance
+  # issues to be expected
+  targetSeq <- resultValues %in% sivis$cbData$clipBoardText$selectedText %>% which
+  amtMatches <- colSums(data.frame(sapply(sivis$cbData$clipBoardText$selectedText, FUN = "==", resultValues)), na.rm = TRUE)
 
   if(all(amtMatches > 1)){
     foundRatio <- (targetValues %in% resultValues) %>% {sum(.) / length(.)}
@@ -1142,7 +1214,7 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list(), r
     if(length(pattern)){
 
       # config parameter
-      if(pattern > 0.6){
+      if(pattern > 0.45){
 
         seqBy <- pattern %>%
           names %>%
@@ -1182,7 +1254,7 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list(), r
       {.[which.max(.)] / (length(targetSeq) - 1)}
 
     if(length(pattern)){
-      if(pattern > 0.6){
+      if(pattern > 0.45){
         seqBy <- pattern %>% names %>% as.numeric
 
         if(seqBy > 1){
@@ -1198,6 +1270,7 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list(), r
     }
   }
 
+  # config parameter
   if(foundRatio < 0.9){
     glue("Only found {foundRatio*100} per cent of target values, while extracting from json.") %>% warning
     allFound <- FALSE
@@ -1262,8 +1335,8 @@ test_html <- function(responseString, targetValues){
   isList
 
   # get false alarm for html if its text json instead, check if i find the tags
-  # todo: do ireally want to check if over sapply and df/matrix?
-  yieldsUsefulXPATH <- sapply(
+  # todo: do i really want to check if over sapply and df/matrix?
+  isUsefulXPath <- sapply(
     X = targetValues,
     FUN = getXPathByText,
     doc = doc,
@@ -1289,7 +1362,7 @@ test_html <- function(responseString, targetValues){
   #   all
 
   #if(isList & foundTags & length(tags) == 1) stop ("HEEEEEEEEEREEE")
-  htmlFound <- isList & yieldsUsefulXPATH
+  htmlFound <- isList & isUsefulXPath
   return(htmlFound)
 }
 
@@ -1329,7 +1402,20 @@ findDocType <- function(responseString, targetValues){
 
   if(sum(matches)){
 
-    matchWinner <- ScriptJSON %>% sapply(FUN = "[", "matchRatio") %>% unlist %>% which.max
+    targetValMatchRatios <- ScriptJSON %>% sapply(FUN = "[", "matchRatio") %>% unlist
+    matchWinner <- targetValMatchRatios %>% which.max
+
+    # it can be the case, that both jsonArray and jsonObjects match and they contain the same
+    # amount of matches as the structure is [{...}, {...}, {...},]. In that case
+    # i would prefer having a single json array, instead of multiple jsonObjects.
+    allEqual <- length(unique(targetValMatchRatios)) == 1
+    if(allEqual){
+      LenJsonObject <- ScriptJSON$jsonObject$jsons %>% unlist %>% nchar %>% sum
+      LenJsonArray <-  ScriptJSON$jsonArray$jsons %>% unlist %>%  nchar %>% sum
+      matchWinner <- c(LenJsonObject, LenJsonArray) %>% which.max
+    }
+
+
     ScriptJSON <- ScriptJSON[[matchWinner]]
 
   }else{
@@ -1521,7 +1607,7 @@ baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys = NULL, extrac
   }else{
     # dont unlist for sivis additional keys: "tr_j_httpscareersgooglecomapijobsjobsv1searchcompanyGooglecompanyYouTubehlenjloenUSlocationZC3BCrich2C20S.RData"
     # %>% unlist %>% unname %>% data.frame(data = .)
-    display <- "tbl <- do.call(what = rbind, args = output) %>% .[complete.cases(.), ]"
+    display <- "tbl <- do.call(what = rbind, args = output) %>% .[complete.cases(.), ] %>% data.frame"
   }
   # indexes <- extractPathes$scriptJsonIndex[[1]]$JSONIdx
   # if(length(indexes) > 1){
@@ -1558,14 +1644,14 @@ baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys = NULL, extrac
         targetKeys <- vars[[nr]]$targetKey
         sivis$targetKeys <- targetKeys
       }
-      jsons[nr] <- jsonsRaw[[1]](targetKeys = targetKeys, base = base, baseFollow = baseFollow)
+      extractions["json"][nr] <- jsonsRaw[[1]](targetKeys = targetKeys, base = base, baseFollow = baseFollow)
     }
   }
 
-  extractionAll <- c(extractions[names(extractions) != "json"] %>% unlist, jsons) %>%
+  extractionAll <- extractions %>% unlist %>%
     paste(collapse = "\n")
 
-  request <- paste0(c(
+  xhrHeader <- paste0(c(
     'library(DT)',
     'library(httr)',
     '# ", 1 + (nr - 1)*maxItems,"',
@@ -1581,26 +1667,33 @@ baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys = NULL, extrac
     # paste0('\tbaseFollow = ', baseFollow,','),
     # paste0('\ttargetKeys = ', targetKeys,','),
     paste0('\treqMethod = "', reqMethod, '"', scrBdy, scrHdr, ""),
-    ')',
-    '',
-    '',
-    'output <- list()',
-    'response <- "InitWithValue"',
-    'nr <- 1',
-    '',
-    'while(length(response)){',
-    '\tSys.sleep(0.2)',
-    '\tprint(nr)',
-    '\turl <- scraper$urlGen(nr)',
-    '\t',
-    paste0(c('\tgetRes <- ', reqMethod,'(url = url', bdy, hdr, ')'), collapse = ""),
-    '\tif(getRes$status_code != 200) return(NULL)',
-    '\tresponse <- content(getRes, type = "text")',
-    extractionAll
-  ),
-  collapse = "\n")
+    ')'), collapse = "\n")
+
+  sivis$xhrHeader <- xhrHeader
+
+  request <- paste0(
+    c(
+      '',
+      '',
+      'output <- list()',
+      'response <- "InitWithValue"',
+      'nr <- 1',
+      '',
+      'while(length(response)){',
+      '\tSys.sleep(0.2)',
+      '\tprint(nr)',
+      '\turl <- scraper$urlGen(nr)',
+      '\t',
+      paste0(c('\tgetRes <- ', reqMethod,'(url = url', bdy, hdr, ')'), collapse = ""),
+      '\tif(getRes$status_code != 200) return(NULL)',
+      '\tresponse <- content(getRes, type = "text")',
+      extractionAll
+    ),
+    collapse = "\n"
+  )
 
   list(
+    headers = xhrHeader,
     request = request,
     display = display
   )
@@ -1617,7 +1710,7 @@ safeDeparse <- function(expr){
 #
 createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathes = extractPathes, testEval = FALSE, reqMethod = "GET", headers = NULL, useHeader = FALSE, body = NULL){
   # need this later for the .rmd file, to get additional fields from the get/post request
-
+  print("xxxxs2")
   # fileName <- sivis[["fileName"]]
   #if(is.null(fileName))
   fileName <- "Notebook_Scraping.Rmd"
@@ -1644,21 +1737,28 @@ createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathe
   )
 
   # todo refactor
-  request_code <- paste(c(
-    baseGet$request,
-    '\toutput[[nr]] <- response',
-    '\tnr <- nr + 1',
-    '',
-    '\t######## INITIALLY ONLY ONE ROUND',
-    '\tresponse <- c()',
-    '\t######## INITIALLY ONLY ONE ROUND',
-    '}',
+  sivis$xhrRequest <- paste0(
+    c(
+      baseGet$request,
+      '\toutput[[nr]] <- response',
+      '\tnr <- nr + 1',
+      '',
+      '\t######## INITIALLY ONLY ONE ROUND',
+      '\tresponse <- c()',
+      '\t######## INITIALLY ONLY ONE ROUND',
+      '}'
+    ), collapse = "\n"
+  )
+
+  sivis$reproduceForPageChange <- paste(c(
+    baseGet$headers,
+    sivis$xhrRequest,
     baseGet$display
   ), collapse = "\n")
 
   if(testEval){
     success <- tryCatch(
-      eval(parse(text = request_code), envir = .GlobalEnv),
+      eval(parse(text = sivis$reproduceForPageChange), envir = .GlobalEnv),
       error = function(e) return(FALSE) ##do.call(return, list(e), envir = sys.frame(2 - sys.nframe())) # 2 - sys.nframe()
     )
 
@@ -1682,9 +1782,15 @@ createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathe
                     'The required content was found in a GET request.',
                     '',
                     '```{r}',
-                    request_code,
+                    sivis$reproduceForPageChange,
                     'datatable(tbl)',
                     '',
+                    '```',
+                    '',
+                    'Put scraper to production:',
+                    '',
+                    '```{r}',
+                    paste0(c('postToProduction(host = "http://', host,'")'), collapse = ""),
                     '```',
                     '',
                     'Potential new fields to consider:',
@@ -1717,7 +1823,7 @@ createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathe
 }
 
 createDocument <- function(pageUrl, extractPathes, responseString, testEval = FALSE, reqMethod = "GET", useHeader = FALSE, body = NULL, XPathes = ""){
-
+  print("xxxxs")
   # XPathes <- sivis$XPathes
   OneXPathOnly <- TRUE #length(XPathes) == 1
   fileName <- sivis[["fileName"]]
@@ -1727,24 +1833,11 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
   hdr <- paste0('(add_headers(.headers = ', headers,'))')
   if(is.null(headers)) hdr <- ""
 
-  noJSON <- is.null(extractPathes$json)
-  if(noJSON){
-    # config parameter should i include empty header to make it more easy to add some?
-    getTemplate <- paste0(c('library(httr)',
-                            'library(DT)',
-                            paste0('url <- "', pageUrl, '"'),
-                            paste0(c('response <- url %>% GET', hdr,' %>% content(type = "text")'), collapse = ""),
-                            'response %>% showHtmlPage',
-                            'xpath <- data.frame(',
-                            paste(c('\t"', XPathes, '"'), collapse = ""),
-                            ')',
-                            'response %<>% read_html %>% html_nodes(xpath = as.character(xpath)) %>% html_text()'
-    ), collapse = "\n"
-    )
-    getFinishTemplate <- ""
-    indent <- ""
-    displayResults <- 'response %>% data.frame %>% DT::datatable()'
-  }else{
+  hasJSON <- !is.null(extractPathes$json)
+
+  if(hasJSON){
+
+    libCall <- ""
     indent <- "\t"
     sivis$initGET <- extractPathes$json
     base <- safeDeparse(dput(extractPathes$json$base))
@@ -1772,14 +1865,45 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
                                    '}'),
                                  collapse = "\n"
     )
+
+    sivis$xhrRequest <- paste(getTemplate$request, getFinishTemplate, collapse = "\n")
+
+    sivis$reproduceForPageChange <- paste(sivis$xhrHeader, sivis$xhrRequest, collapse = "\n")
     displayResults <- "do.call(rbind, output) %>% c %>% data.frame %>% DT::datatable()"
+
+  }else{
+    # config parameter should i include empty header to make it more easy to add some?
+    getTemplate <- paste0(c(paste0(c('response <- url %>% GET', hdr,' %>% content(type = "text")'), collapse = ""),
+                            '#response %>% showHtmlPage',
+                            'xpath <- data.frame(',
+                            paste(c('\t"', XPathes, '"'), collapse = ""),
+                            ')',
+                            'response %<>% read_html %>% html_nodes(xpath = as.character(xpath)) %>% html_text()'
+    ), collapse = "\n"
+    )
+    getFinishTemplate <- ""
+    indent <- ""
+    libCall <-paste0(c(
+      'library(httr)',
+      'library(DT)',
+      paste0('url <- "', pageUrl, '"')),
+      collapse = "\n"
+    )
+
+    sivis$reproduceForPageChange <- paste(c(
+      getTemplate,
+      getFinishTemplate
+    ), collapse = "\n")
+
+
+    displayResults <- 'response %>% data.frame %>% DT::datatable()'
   }
 
-  request_code <- paste(c('options(stringsAsFactors = FALSE)',
-                          'library(xml2)',
-                          getTemplate,
-                          getFinishTemplate
-  ), collapse = "\n")
+  # sivis$cbData$request$request$url
+  # url <- sivis$cbData$request$request$url
+  # requestCode <- sivis$reproduceForPageChange
+  # dynamicUrl(url, requestCode)
+
 
   if(testEval){
     success <- tryCatch(
@@ -1801,34 +1925,37 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
 
   addCols <- commonXPathRes$addColsOutput %>%
     do.call(what = cbind) %>%
-    .[, colSums(is.na(.)) != nrow(.)] %>% # remove NA rows
-    .[, !duplicated(., MARGIN = 2)] %>%  # remove duplicate cols
-    .[complete.cases(.), ] # and remove NA cols
+    .[, colSums(is.na(.)) != nrow(.), drop = FALSE] %>% # remove NA rows
+    .[, !duplicated(., MARGIN = 2), drop = FALSE] %>%  # remove duplicate cols
+    .[complete.cases(.), , drop = FALSE] # and remove NA cols
+    #as.data.frame(col.names = colnames(.)) %>% # ensure two dimensions - not needed anymore due to drop = FALSE?
+
 
   # make the order that columns which have only same values appear at last, because they might contain only title
   # of other columns or other irrelevant data
   onlyDupes <- apply(addCols, 2, FUN = function(col) col %>% table %>% {max(.) == length(col)}) %>% which
   order <- c(setdiff(1:ncol(addCols), onlyDupes), onlyDupes)
-  addCols <- addCols[, order]
+  addCols <- addCols[, order, drop = FALSE]
 
   # config parameter - remove empty character columns
   nonEmptyCol <- addCols %>%
     apply(MARGIN = 2, FUN = function(col) col %>% gsub(pattern = "\n|\t", replacement = "") %>% nchar %>% sum %>% magrittr::is_greater_than(0))
-  addCols <- addCols[, nonEmptyCol]
+  addCols <- addCols[, nonEmptyCol, drop = FALSE]
 
+  if(!exists("nr")) nr <- 999
   save(addCols, file = paste0("addCols_", nr, ".RData")) # for batch testing
   rootXpath <- commonXPathRes$rootXPath
 
   additionColExist <- ncol(addCols)
   if(additionColExist){
-    mat <- apply(addCols, 1, function(row) !is.na(row) & nchar(row))
+    mat <- apply(addCols, 1, function(row) !is.na(row) & nchar(row)) %>% data.frame
     idx1 <- apply(mat, 2, sum) %>% order(decreasing = TRUE)
 
-    missing <- mat[, idx1[1]] %>% magrittr::not() %>% which
-    idx2 <- apply(mat[missing, ,drop = FALSE], 2, sum) %>% order(decreasing = TRUE)
+    missing <- mat[, idx1[1], drop = FALSE] %>% magrittr::not() %>% which
+    idx2 <- apply(mat[missing, , drop = FALSE], 2, sum) %>% order(decreasing = TRUE)
 
     idx <- c(idx1[1], setdiff(idx2, idx1[1]))
-    addCols <- addCols[idx, ]
+    addCols <- addCols[idx, , drop = FALSE]
     assign("addCols", addCols, envir = .GlobalEnv) # need the variable accessible in scraping script, to make selections from shiny
 
     # config parameter
@@ -1839,8 +1966,6 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
     # might not realise that columns cann be selected
     selectedCol <- 1:ncol(addCols)
 
-
-
     moreCols <- addColsOption(
       addCols = addCols,
       rootXpath = rootXpath,
@@ -1848,7 +1973,13 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
       selectedCol = 1 # initially only the column is selected, that was selected in the browser.
     )
   }else{
-    moreCols <- "Did not detect any candidates for additional columns/variables."
+    moreCols <- paste0(
+      c(
+        "",
+        "",
+        "Did not detect any candidates for additional columns/variables."
+      ), collapse = "\n"
+    )
   }
 
   writeLines(
@@ -1861,14 +1992,24 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
                    'The required content was found in the source code. Therefore, rvest was chosen over RSelenium due to performance reasons.',
                    '',
                    '```{r}',
-
-                   request_code,
+                   'options(stringsAsFactors = FALSE)',
+                   'library(xml2)',
+                   libCall,
+                   sivis$reproduceForPageChange,
 
                    displayResults,
 
-                   moreCols,
+                   '```',
 
-                   '```'),
+                   '',
+                   '```{r}',
+                   paste0(c('postToProduction(host = "http://', host,'")'), collapse = ""),
+                   '```',
+                   '',
+
+                   moreCols),
+
+
                  collapse = "\n"),
     con = fileName
   )
@@ -1878,7 +2019,6 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
 addColsOption <- function(addCols, rootXpath, pageUrl, selectedCol){
   paste0(
     c(
-      '```',
       '',
       '',
       'Potential new fields to consider:',
@@ -1927,28 +2067,35 @@ addColsOption <- function(addCols, rootXpath, pageUrl, selectedCol){
       '\t)',
       '}',
       '',
-      'runApp(\n\tappDir = shinyApp(ui, server), \n\tlaunch.browser = rstudioapi::viewer\n)'
+      'runApp(\n\tappDir = shinyApp(ui, server), \n\tlaunch.browser = rstudioapi::viewer\n)',
+      '```'
     )
   )
 }
 
-updateDocument <- function(XPathes, rootXPath, pageUrl, selectedCol){
-  fileName <- "Notebook_Scraping.Rmd"
+updateDocument <- function(XPathes, rootXPath, pageUrl, selectedCol, doc = getActiveDocumentContext()){
+
   xp <- paste(XPathes, collapse = ",\n\t")
 
   amtXP <- length(XPathes)
+
+  # need this part to test for additional pages where similar data could be found.
+  sivis$reproduceForPageChange <- paste0(
+    c('xpathes <- ', paste(c(paste(c("data.frame(", glue("XPath{1:amtXP} = '{XPathes}'{c(rep(',', amtXP - 1), '')}\n\t")), collapse = "\n\t"), ")"), collapse = "\n"),
+    'nodes <- read_html(x = url) %>% html_nodes(xpath = ', rootXPath %>% safeDeparse,')',
+    'data <- lapply(xpathes, function(xpath){',
+    '\tlapply(nodes, function(node) html_nodes(x = node, xpath = xpath) %>% {ifelse(length(.), yes = html_text(.), no = NA)}) %>% unlist',
+    '})'), collapse = "\n")
+
   rcode <- paste0(c('options(stringsAsFactors = FALSE)',
                     'library(rvest)',
                     'library(DT)',
                     '',
                     paste0('url <- "', pageUrl, '"'),
-                    paste0('xpathes <- ', paste(c(paste(c("data.frame(", glue("XPath{1:amtXP} = '{XPathes}'{c(rep(',', amtXP - 1), '')}\n\t")), collapse = "\n\t"), ")"), collapse = "\n")),
-                    'nodes <- read_html(x = url) %>% html_nodes(xpath = ', rootXPath %>% safeDeparse,')',
-                    'data <- lapply(xpathes, function(xpath){',
-                    '\tlapply(nodes, function(node) html_nodes(x = node, xpath = xpath) %>% {ifelse(length(.), yes = html_text(.), no = NA)}) %>% unlist',
-                    '})',
+                    sivis$reproduceForPageChange,
+                    'data %<>% do.call(what = cbind) %>% .[complete.cases(.), ]',
                     'dt <- datatable(',
-                    '\tdata = data %>% do.call(what = cbind) %>% .[complete.cases(.), ],',
+                    '\tdata = data,',
                     '\toptions = list(pageLength = 10)',
                     ')',
                     'dt'), collapse = "\n")
@@ -1967,11 +2114,21 @@ updateDocument <- function(XPathes, rootXPath, pageUrl, selectedCol){
                     '',
                     '```{r}',
                     rcode,
+                    '```',
+                    '',
+                    '```{r}',
+                    paste0(c('postToProduction(host = "http://', host,'")'), collapse = ""),
+                    '```',
+                    '',
                     addColsOption(addCols, rootXPath, pageUrl, selectedCol),
                     '```'),
                   collapse = "\n"
-    ), con = fileName)
-  file.edit(fileName)
+    ), con = doc$path)
+  print(doc$path)
+
+  rstudioapi::documentSave(id = doc$id)
+  file.edit(doc$path)
+  print("done")
 }
 
 
@@ -2011,7 +2168,6 @@ CommonXPathData <- function(responseString, xp1, extractPathes){
   doc <- responseString %>% read_html
 
   if(!length(html_node(x = doc, xpath = xp1))) stop(glue("Found an invalid XPath: {xp1} while attempting to find a commonXPath."))
-  if(!length(html_node(x = doc, xpath = xp2))) stop(glue("Found an invalid XPath: {xp2} while attempting to find a commonXPath."))
 
   tags <- doc %>% html_nodes(xpath = xp1)
   leafPathes <- getLeafPathes(doc, tags)
@@ -2199,19 +2355,24 @@ GetLink <- function(newLink = TRUE){
   xp <- getXPathFromScript()
 
   if(newLink){
+
     browserOutput <- sivis$browserOutput
     if(is.null(browserOutput)) browserOutput <- readClipboard() %>% fromJSON
+
     links <- browserOutput$links
     if(all(is.na(links))) stop("Provided clipboard data doesnt have links as href attributes.")
+
     allEqual <- all(duplicated(links, fromLast = TRUE) | duplicated(links, fromLast = FALSE))
     if(allEqual){
-      print("Href Attribute is not iterable")
+
+      warning("Href Attribute is not iterable")
       return()
+
     }else{
+
       urlGen <- IterableLinkGenerator(links = links)
       sivis$urlGen <- urlGen
-      # nr <- 1:4
-      # print(!sapply(X = urlGen(nr), FUN = http_error))
+
     }
   }
 
@@ -2364,7 +2525,7 @@ getXPath <- function(url, text = NULL, xpath = NULL, exact = FALSE, doc = NULL, 
       doc = doc
     )
     xpathes[nr] <- allXP$xpath
-    ColsAltern[[nr]] <- unlist(allXP$xpathOtherCols)
+    # ColsAltern[[nr]] <- unlist(allXP$xpathOtherCols)
   }
 
   ColsAltern %<>% unlist %>% unique
@@ -2450,7 +2611,7 @@ allText = NULL
 getOtherCols = TRUE
 getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allText = NULL, doc, rootPath = "/*", getOtherCols = TRUE, justOneTag = FALSE){
 
-  if(!length(tag)) return(NULL)
+  if(!length(tag)) return(list(xpath = NULL))
   rootTags <- doc %>% html_nodes(xpath = rootPath)
 
   tagName <- ""
@@ -2461,7 +2622,9 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
   iterTag <- tag # in case of debugging nike needed
   tagsOtherCols <- NULL
   XPathFound <- iterTag %in% rootTags
+  if(html_name(iterTag) == "html") stop("iterTag is html root")
 
+  iterNr <- 1
   while(!XPathFound){
     tagName <- iterTag %>% html_name
     tagNameInsert <- tagName
@@ -2493,6 +2656,8 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
 
       #  | notInAllTags
       # todo: do i really measure this correctly? Example: Blackrock
+      # is a tradeoff - cant find all. but things might have changed since i removed
+      # addcols calculation from here.
       tagMatch <- sapply(allText, FUN = grepl, x = childrenMatchText, fixed = TRUE)
       if(!length(tagMatch %>% unlist)){
         inJustOneTag <- FALSE
@@ -2538,6 +2703,9 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
           if(hasTarget) tagNameAltern <- glue("{tagName}[{which(matches != 1)}]")
         }
       }
+      iterNr <- iterNr + 1
+      # config parameter
+      if(iterNr > 70) stop("Too many iterations (70+) in getxpathbytag()")
     }
 
     # todo: refactor
@@ -2561,82 +2729,81 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
 
     xpElems <- c(xpElems, tagNameInsert)
     iterTag <- iterTag %>% html_nodes(xpath = "..")
-    # print(iterTag)
     # print(iterTag %>% html_text)
   }
 
-  #todo: sometimes a tag "text" comes up, that i dont want. However, if i debug nike jobsite
+    #todo: sometimes a tag "text" comes up, that i dont want. However, if i debug nike jobsite
   # tag script does not come up, but i want it.
   xpElems <- xpElems[magrittr::not(xpElems %in% c("text", ""))]
   if(rootPath != "/*") xpElems <- xpElems[-length(xpElems)] # & length(xpElems) > 1
   xpath <- paste(c("", xpElems[length(xpElems):1]), collapse = "/")
 
-  # tags <- tagsOtherCols[[2]]
-  xpathOtherCols <- NULL
-  if(getOtherCols){
-
-    # tags <- tagsOtherCols[[4]]
-    xpathOtherCols <- lapply(tagsOtherCols, FUN = function(tags){
-      tags <- tags[magrittr::not(tags %in% c("text", ""))]
-      xpCand <- paste(c("", tags[length(tags):1]), collapse = "/")
-
-      hasTextChild <- TRUE
-
-      while(hasTextChild){
-
-        children <- lapply(xpCand, FUN = function(xpath){
-          nodes <- html_node(x = doc, xpath = xpath) %>%
-            html_nodes(xpath = "child::*") %>% as.list
-        })
-        children
-        if(!length(unlist(children))) break
-
-        addTagName <- lapply(children, function(child){
-          if(!length(child)) return("")
-          lapply(child, function(ch){
-            return(ifelse(length(ch), yes = ch %>% html_name %>% paste0("/", ., collapse = ""), no = ""))
-          })
-        })
-
-        # library(rlist)
-        # addTagName <- rlist::list.flatten(addTagName)
-
-        addTagName <- lapply(addTagName, function(tagName){
-          tbl <- table(unlist(tagName))
-          name <- names(tbl)[1]
-          for(name in names(tbl)){
-            idx <- which(name == tagName)
-            if(nchar(name) & length(idx) > 1) tagName[idx] <- glue("{name}[{1:length(idx)}]")
-          }
-          tagName
-        })
-
-        nr <- 1
-        out <- list()
-        for(nr in 1:length(xpCand)){
-          out[[nr]] <- paste0(xpCand[nr], addTagName[[nr]] %>% unlist)
-        }
-        xpCand <- out %>% unlist
-        hasTextChild <- lapply(children, function(child) child %>% html_text %>% nchar) %>% unlist %>% sum
-
-      }
-
-      # todo very dirty - remove first element, because it is already in commonXPath, but i need it as a start point
-      if(rootPath != "/*"){
-        xpCand %<>% strsplit(split = "/") %>% unlist %>% .[-2] %>% paste(collapse = "/")
-      }
-      xpCand
-
-    })
-  }
-
   return(
     list(
-      xpath = xpath,
-      xpathOtherCols = xpathOtherCols
+      xpath = xpath
     )
   )
 }
+
+# # tags <- tagsOtherCols[[2]]
+# xpathOtherCols <- NULL
+# if(getOtherCols){
+#
+#   # tags <- tagsOtherCols[[4]]
+#   xpathOtherCols <- lapply(tagsOtherCols, FUN = function(tags){
+#     tags <- tags[magrittr::not(tags %in% c("text", ""))]
+#     xpCand <- paste(c("", tags[length(tags):1]), collapse = "/")
+#
+#     hasTextChild <- TRUE
+#
+#     while(hasTextChild){
+#
+#       children <- lapply(xpCand, FUN = function(xpath){
+#         nodes <- html_node(x = doc, xpath = xpath) %>%
+#           html_nodes(xpath = "child::*") %>% as.list
+#       })
+#       children
+#       if(!length(unlist(children))) break
+#
+#       addTagName <- lapply(children, function(child){
+#         if(!length(child)) return("")
+#         lapply(child, function(ch){
+#           return(ifelse(length(ch), yes = ch %>% html_name %>% paste0("/", ., collapse = ""), no = ""))
+#         })
+#       })
+#
+#       # library(rlist)
+#       # addTagName <- rlist::list.flatten(addTagName)
+#
+#       addTagName <- lapply(addTagName, function(tagName){
+#         tbl <- table(unlist(tagName))
+#         name <- names(tbl)[1]
+#         for(name in names(tbl)){
+#           idx <- which(name == tagName)
+#           if(nchar(name) & length(idx) > 1) tagName[idx] <- glue("{name}[{1:length(idx)}]")
+#         }
+#         tagName
+#       })
+#
+#       nr <- 1
+#       out <- list()
+#       for(nr in 1:length(xpCand)){
+#         out[[nr]] <- paste0(xpCand[nr], addTagName[[nr]] %>% unlist)
+#       }
+#       xpCand <- out %>% unlist
+#       hasTextChild <- lapply(children, function(child) child %>% html_text %>% nchar) %>% unlist %>% sum
+#
+#     }
+#
+#     # todo very dirty - remove first element, because it is already in commonXPath, but i need it as a start point
+#     if(rootPath != "/*"){
+#       xpCand %<>% strsplit(split = "/") %>% unlist %>% .[-2] %>% paste(collapse = "/")
+#     }
+#     xpCand
+#
+#   })
+# }
+#
 
 
 # vec <- letters[1:4]
@@ -2705,6 +2872,7 @@ getLeafPathes <- function(doc, tags){
     out[[nr]] <- tags
     lenTags <- length(tags)
     nr <- nr + 1
+    if(nr > 70) stop("Too many iterations (70+) in getLeafPathes()")
   }
 
   start <- out[[nr - 2]]
@@ -2724,11 +2892,18 @@ getLeafPathes <- function(doc, tags){
 
   leaves <- start %>% html_nodes(xpath = "*//*[not(descendant::*)]")
 
-  leaf <- leaves[6]
-  leafPathes <- rep(NA, length(leaves))
+  leafPathes <- list()
+  if(!length(leaves)){
+    return(
+      list(
+        subPathes = NULL,
+        rootPath = NULL
+      )
+    )
+  }
   nr <- nr + 1
   for(nr in 1:length(leaves)){
-    leafPathes[nr] <- getXPathByTag(
+    leafPathes[[nr]] <- getXPathByTag(
       tag = leaves[nr],
       rootPath = rootPath,
       doc = doc,
@@ -3055,14 +3230,14 @@ subsetByStr2 <- function(lstRaw, arr){
 
 
 subsetByStr3 <- function(lstRaw, arr){
-  #
+
   if(typeof(lstRaw) == "list" & !is.data.frame(lstRaw)){
+    if(is.null(lstRaw[[1]][[arr]]) & !is.null(lstRaw[[1]][[1]][[arr]]) & length(lstRaw) == 1){
+      lstRaw <- lstRaw[[1]]
+    }
     # as.data.frame for     fl <- "httpshiremyaviontecomsonarv2jobBoardQ16L3ooLDFQW1VE2wFUOsQ.RData"
     lstRaw <- do.call(rbind, lstRaw) %>% data.frame # for workadays: https://flir.wd1.myworkdayjobs.com/flircareers/jobs
   }
-  #if(is.null(names(lstRaw))) lstRaw <- unlist(lstRaw)
-  # allow for regex here:
-  #arr <- "text"
 
   # there can be multple matches like for https://aimcojobs.com/ListJobs?. But why do i do this anyway? why dont take regex
   # directly, because i cant subset that way,  but can i later?? or subset with regex?
@@ -3082,6 +3257,7 @@ subsetByStr3 <- function(lstRaw, arr){
   #if(typeof(lst) == "list") lst <- do.call(rbind, lst)
 
   lst[[arr]] %>% as.character # prevent dropping nulls and getting results of different length that are harder to bind.
+
   # cant there be multiple arr?? actualy no right? why this loop then?
   # for(nr in 1:length(arr)){
   #   lst <-  lst[[arr[nr]]]
@@ -3432,6 +3608,8 @@ unpack_JSON <- function(response, targetKeys, base, baseFollow = NULL){
 
   if(!length(baseElems)) return(NULL)
 
+
+  # requirements: baseElems[[1]][[1]]$Value[8] for https://sjobs.brassring.com/TGnewUI/Search/Home/Home?partnerid=25678&siteid=5275#keyWordSearch=&locationSearch=
   targetKey <- targetKeys[1]
   texts <- lapply(targetKeys, function(targetKey){
     baseElem <- baseElems[1]
@@ -3449,7 +3627,7 @@ unpack_JSON <- function(response, targetKeys, base, baseFollow = NULL){
     df
   })
 
-
+  ff <- rlist::list.flatten(texts)
   res <- do.call(what = cbind, texts)
   colnames(res) <- targetKeys
   rownames(res) <- NULL
@@ -3560,10 +3738,38 @@ anonymise <- function(str){
 }
 
 
+postToProduction <- function(mailAddress = "liebrr@gmail.com", doc = getActiveDocumentContext(), host = "http://192.168.1.4", ...){
 
-### FEHLERDATENBANK:
-# Cant get the data in clipboard cache. --> Restart Chrome :(
-#https://karriere.rewe.de/jobs/suche?term=
+  rstudioapi::documentSave(id = doc$id) # does this work??
 
-# httpshenryscheintaleonetcareersectionhsi1moresearchftllangen.RData
-#httpscareersglobelifeinsurancecomjobsjobsbycategory.RData
+  lines <- readLines(doc$path)
+  start <- which(lines == "```{r}")[1] + 1
+  end <- which(lines == "```")[1] - 1
+  code <- lines[start:end] %>% paste(collapse = "\n")
+  print(code)
+
+  localTest <- eval(parse(text = code))
+
+  code <- URLencode(code, reserved = TRUE, repeated = TRUE)
+  # code <- URLencode("GET('http://www.r-bloggers.com')", reserved = TRUE)
+  #URLdecode(code) -> f
+  #eval(parse(text = f))
+  mail <- URLencode(mailAddress, reserved = TRUE, repeated = TRUE)
+
+  timing <- "" %>% #list(...)
+    safeDeparse() %>%
+    URLencode(reserved = TRUE)
+
+  body = paste0(
+    "code=", code,
+    "&mail=", mail,
+    "&timing=", timing
+  )
+
+  port <- "7192"
+  method <- "setproductive"
+  httr::POST(
+    url = glue("{host}:{port}/{method}"),
+    body = body
+  ) %>% content %>% unlist
+}
