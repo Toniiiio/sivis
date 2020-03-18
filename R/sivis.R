@@ -1,3 +1,7 @@
+#### new potential job source
+## scale over company id
+##  "https://jobsapi-internal.m-cloud.io/api/job?callback=jobsCallback&offset=11&sortfield=open_date&sortorder=descending&Limit=10&Organization=1909"
+
 ### Randbedingungen
 # - nur Textdaten
 # - wenn mehrere Daten/Seiten, auf 2-X Seite gehen, weil dann alle Parameter da sind.
@@ -7,6 +11,10 @@
 "https://www.royalcareersatsea.com/jobs/results/page:2"
 #https://lifeatexpediagroup.com/jobs/?&page=2
 
+# pagechange for getrequest
+# https://careers.equifax.com/global/en/c/technology-jobs?from=20&s=1
+
+
 # aufbröseln von c() bei jsons?
 #https://pc00.paycomonline.com/v4/ats/web.php/jobs?&clientkey=A38173AIE92874820ALRE20847CDE927PIW76526#
 # https://edel.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/requisitions
@@ -15,6 +23,7 @@
 ##https://sjobs.brassring.com/TGnewUI/Search/Home/Home?partnerid=25678&siteid=5275#keyWordSearch=&locationSearch=
 
 #missing addcols`
+#"https://www.essexapartmenthomes.com/careers/jobs"
 #https://careers.questdiagnostics.com/en-US/search?pagenumber=2
 #https://careers.leidos.com/search/jobs/in?page=2#
 #https://jobs.fcx.com/search/?searchby=location&createNewAlert=false&q=&locationsearch=&geolocation=
@@ -23,7 +32,7 @@
 #https://careers.key.com/en-US/search?pagenumber=2
 # https://careers.firstrepublic.com/index.php?keyword=&search-openings=Search+Openings#
 # http://www.bestbuy-jobs.com/search/?sort=job_title&pg=6
-
+# http://jobs.prudential.com/job-listing.php?keyword=&jobType=&location=&jobLabel=&jobLocation=
 
 ######### pagechange in url
 #https://careers.leidos.com/search/jobs/in?page=2#
@@ -1162,6 +1171,10 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list(), r
       # check if it is another json: example: httpswwwroberthalfcomworkwithuscareersatroberthalfinternaljobsalljobsalllocationsalltypesroberthalfca.RData
     }
 
+    if(!is.null(JSONValues$targetKey) & !is.null(JSONValues$base)){
+      if(tail(JSONValues$base, 1) == JSONValues$targetKey) JSONValues$base %<>% head(-1)
+    }
+
     jsonToExtract <- list(
       reponse = "json",
       isLargeHTML = JSONValues$isLargeHTML,
@@ -1651,7 +1664,9 @@ baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys = NULL, extrac
   extractionAll <- extractions %>% unlist %>%
     paste(collapse = "\n")
 
-  xhrHeader <- paste0(c(
+  # require a function here, because it should be optional to replace pageUrl with a pageSize or itemSize dynamic parameter
+  xhrHeader <- function(urlFunc){
+    paste0(c(
     'library(DT)',
     'library(httr)',
     '# ", 1 + (nr - 1)*maxItems,"',
@@ -1659,27 +1674,27 @@ baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys = NULL, extrac
     '',
     'scraper <- list(',
     # paste0('\turlHTTP = "', url, '",'),
-    '\turlGen = function(nr){',
-    '\t\tmaxItems <- 100',
-    paste0('\t\tpaste0("', pageUrl, '")'),
-    '\t},',
+    paste0('\turlGen = ', urlFunc, ','),
+
+    #'\ t urlGen = function(nr){', paste0('\ t \ t paste0("', pageUrl, '")'), '\ t},',
     # paste0('\tbase = ', base,','),
     # paste0('\tbaseFollow = ', baseFollow,','),
     # paste0('\ttargetKeys = ', targetKeys,','),
     paste0('\treqMethod = "', reqMethod, '"', scrBdy, scrHdr, ""),
-    ')'), collapse = "\n")
+    ')',
+    '',
+    '',
+    'output <- list()',
+    'response <- "InitWithValue"',
+    'nr <- 1',
+    ''
+    ), collapse = "\n")
+  }
 
   sivis$xhrHeader <- xhrHeader
 
   request <- paste0(
-    c(
-      '',
-      '',
-      'output <- list()',
-      'response <- "InitWithValue"',
-      'nr <- 1',
-      '',
-      'while(length(response)){',
+    c('while(length(response)){',
       '\tSys.sleep(0.2)',
       '\tprint(nr)',
       '\turl <- scraper$urlGen(nr)',
@@ -1706,8 +1721,6 @@ safeDeparse <- function(expr){
   gsub("[[:space:]][[:space:]]+", " ", ret)
 }
 
-
-#
 createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathes = extractPathes, testEval = FALSE, reqMethod = "GET", headers = NULL, useHeader = FALSE, body = NULL){
   # need this later for the .rmd file, to get additional fields from the get/post request
   print("xxxxs2")
@@ -1750,11 +1763,26 @@ createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathe
     ), collapse = "\n"
   )
 
+  # now i have all info available to test for potential page change / item size parameter
+  # i need sivis$url, sivis$xhrRequest, sivis$xhrHeader
+
+  urlFunc <- getUrlJSONPageChange(
+    url = sivis$url,
+    headerCode = sivis$xhrHeader(urlFunc = glue("function(nr){{'{pageUrl}'}}")),
+    requestCode = sivis$xhrRequest
+  )
+
+  newUrlFunc <- urlFunc %>%
+    deparse %>%
+    trimws %>%
+    paste(collapse = "")
+
   sivis$reproduceForPageChange <- paste(c(
-    baseGet$headers,
+    baseGet$headers(urlFunc = newUrlFunc),
     sivis$xhrRequest,
     baseGet$display
   ), collapse = "\n")
+
 
   if(testEval){
     success <- tryCatch(
@@ -1866,7 +1894,7 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
                                  collapse = "\n"
     )
 
-    sivis$xhrRequest <- paste(getTemplate$request, getFinishTemplate, collapse = "\n")
+    sivis$xhrRequest <- paste(c(getTemplate$request, getFinishTemplate), collapse = "\n")
 
     sivis$reproduceForPageChange <- paste(sivis$xhrHeader, sivis$xhrRequest, collapse = "\n")
     displayResults <- "do.call(rbind, output) %>% c %>% data.frame %>% DT::datatable()"
@@ -1930,23 +1958,27 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
     .[complete.cases(.), , drop = FALSE] # and remove NA cols
     #as.data.frame(col.names = colnames(.)) %>% # ensure two dimensions - not needed anymore due to drop = FALSE?
 
+  if(length(addCols)){
+    # make the order that columns which have only same values appear at last, because they might contain only title
+    # of other columns or other irrelevant data
+    onlyDupes <- apply(addCols, 2, FUN = function(col) col %>% table %>% {max(.) == length(col)}) %>% which
+    order <- c(setdiff(1:ncol(addCols), onlyDupes), onlyDupes)
+    addCols <- addCols[, order, drop = FALSE]
 
-  # make the order that columns which have only same values appear at last, because they might contain only title
-  # of other columns or other irrelevant data
-  onlyDupes <- apply(addCols, 2, FUN = function(col) col %>% table %>% {max(.) == length(col)}) %>% which
-  order <- c(setdiff(1:ncol(addCols), onlyDupes), onlyDupes)
-  addCols <- addCols[, order, drop = FALSE]
+    # config parameter - remove empty character columns
+    nonEmptyCol <- addCols %>%
+      apply(MARGIN = 2, FUN = function(col) col %>% gsub(pattern = "\n|\t", replacement = "") %>% nchar %>% sum %>% magrittr::is_greater_than(0))
+    addCols <- addCols[, nonEmptyCol, drop = FALSE]
 
-  # config parameter - remove empty character columns
-  nonEmptyCol <- addCols %>%
-    apply(MARGIN = 2, FUN = function(col) col %>% gsub(pattern = "\n|\t", replacement = "") %>% nchar %>% sum %>% magrittr::is_greater_than(0))
-  addCols <- addCols[, nonEmptyCol, drop = FALSE]
+    if(!exists("nr")) nr <- 999
+    save(addCols, file = paste0("addCols_", nr, ".RData")) # for batch testing
+    rootXpath <- commonXPathRes$rootXPath
 
-  if(!exists("nr")) nr <- 999
-  save(addCols, file = paste0("addCols_", nr, ".RData")) # for batch testing
-  rootXpath <- commonXPathRes$rootXPath
+    additionColExist <- ncol(addCols)
+  }else{
+    additionColExist <- FALSE
+  }
 
-  additionColExist <- ncol(addCols)
   if(additionColExist){
     mat <- apply(addCols, 1, function(row) !is.na(row) & nchar(row)) %>% data.frame
     idx1 <- apply(mat, 2, sum) %>% order(decreasing = TRUE)
@@ -2174,7 +2206,7 @@ CommonXPathData <- function(responseString, xp1, extractPathes){
 
   xpathes <- c(xp1, extractPathes$xpath$ColAltern)
 
-  # xpath <- xpathes[25]
+  # xpath <- xpathes[1]
   addXP <- sapply(xpathes, FUN = function(xpath){
     tags <- html_nodes(x = doc, xpath = xpath)
     allText <- tags %>% html_text
@@ -2219,6 +2251,8 @@ CommonXPathData <- function(responseString, xp1, extractPathes){
 }
 
 findTextGivenRoot <- function(rootPath, XPath, doc){
+
+  if(is.null(rootPath)) rootPath <- "/*"
 
   nodes <- html_nodes(x = doc, xpath = rootPath)
   texts <- lapply(
@@ -2612,6 +2646,7 @@ getOtherCols = TRUE
 getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allText = NULL, doc, rootPath = "/*", getOtherCols = TRUE, justOneTag = FALSE){
 
   if(!length(tag)) return(list(xpath = NULL))
+  if(is.null(rootPath)) rootPath <- "/*"
   rootTags <- doc %>% html_nodes(xpath = rootPath)
 
   tagName <- ""
@@ -2732,7 +2767,7 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
     # print(iterTag %>% html_text)
   }
 
-    #todo: sometimes a tag "text" comes up, that i dont want. However, if i debug nike jobsite
+  #todo: sometimes a tag "text" comes up, that i dont want. However, if i debug nike jobsite
   # tag script does not come up, but i want it.
   xpElems <- xpElems[magrittr::not(xpElems %in% c("text", ""))]
   if(rootPath != "/*") xpElems <- xpElems[-length(xpElems)] # & length(xpElems) > 1
@@ -2916,6 +2951,8 @@ getLeafPathes <- function(doc, tags){
     table %>%
     names %>%
     substring(first = 2)
+
+  if(is.null(rootPath)) rootPath <- "/*"
 
   list(
     subPathes = subPathes,
@@ -3232,9 +3269,13 @@ subsetByStr2 <- function(lstRaw, arr){
 subsetByStr3 <- function(lstRaw, arr){
 
   if(typeof(lstRaw) == "list" & !is.data.frame(lstRaw)){
-    if(is.null(lstRaw[[1]][[arr]]) & !is.null(lstRaw[[1]][[1]][[arr]]) & length(lstRaw) == 1){
-      lstRaw <- lstRaw[[1]]
+    # refactor: really dirty
+    if(is.list(lstRaw[[1]]) & !is.data.frame(lstRaw[[1]])){
+      if(is.null(lstRaw[[1]][[arr]]) & !is.null(lstRaw[[1]][[1]][[arr]]) & length(lstRaw) == 1){
+        lstRaw <- lstRaw[[1]]
+      }
     }
+
     # as.data.frame for     fl <- "httpshiremyaviontecomsonarv2jobBoardQ16L3ooLDFQW1VE2wFUOsQ.RData"
     lstRaw <- do.call(rbind, lstRaw) %>% data.frame # for workadays: https://flir.wd1.myworkdayjobs.com/flircareers/jobs
   }
