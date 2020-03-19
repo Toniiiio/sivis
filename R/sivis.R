@@ -1152,6 +1152,22 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list(), r
       jsonContent = jsonContent,
       targetValues = targetValues
     )
+
+    # example: https://cboe.wd1.myworkdayjobs.com/External_Career_CBOE
+    # todo: very dirty: collecting more examples
+    # another example would be having title5 as tail(match, 1)
+    # --> therefore need slim variant (without the numbers).
+    # test for both. tes5t==tes5t and test5==test (want both to succeed)
+
+    lastVal <- tail(JSONValues$base, 1)
+    lastValSlim <- gsub(
+      x = lastVal,
+      pattern = "[0-9]",
+      replacement = ""
+    )
+    if(lastVal == JSONValues$targetKey | lastValSlim == JSONValues$targetKey) JSONValues$base %<>% head(n = -1)
+    print(JSONValues$base)
+
     sivis$neighbours <- JSONValues$neighbours
 
     isJSON <- jsonlite:::validate(JSONValues$texts)
@@ -1174,6 +1190,9 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list(), r
     if(!is.null(JSONValues$targetKey) & !is.null(JSONValues$base)){
       if(tail(JSONValues$base, 1) == JSONValues$targetKey) JSONValues$base %<>% head(-1)
     }
+
+
+
 
     jsonToExtract <- list(
       reponse = "json",
@@ -1572,7 +1591,10 @@ baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys = NULL, extrac
   if(length(indexes) > 1){
     indexes <- extractPathes$scriptJsonIndex %>% paste(collapse = ", ") %>% c("c(", ., ")") %>% paste(collapse = "")
   }
-  regex <- extractPathes$scriptJsonIndex[[1]]$jsonRegex %>% dput %>% safeDeparse()
+
+  regex <- extractPathes$scriptJsonIndex[[1]]$jsonRegex %>%
+    dput %>%
+    safeDeparse()
 
   # todo: refactor, that no coercing to string
   handleQuotes <- ""
@@ -1723,7 +1745,7 @@ safeDeparse <- function(expr){
 
 createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathes = extractPathes, testEval = FALSE, reqMethod = "GET", headers = NULL, useHeader = FALSE, body = NULL){
   # need this later for the .rmd file, to get additional fields from the get/post request
-  print("xxxxs2")
+  print("createDocumentGET")
   # fileName <- sivis[["fileName"]]
   #if(is.null(fileName))
   fileName <- "Notebook_Scraping.Rmd"
@@ -3406,10 +3428,17 @@ allJSONValues <- function(jsonContent, targetValues){
   # example for multipleMax on httpswwwroberthalfcomworkwithuscareersatroberthalfinternaljobsalljobsalllocationsalltypesroberthalfca.RData
   multipleMax <- (targetKeyCount == max(targetKeyCount)) %>% sum %>% magrittr::is_greater_than(1)
   if(multipleMax){
+
     # or go directly on regex targetkey? but how to handle double targetkeyslim below again?
-    targetKey <- gsub(x = targetKeys, pattern = "[0-9]", replacement = "") %>% table %>% which.max %>% targetKeys[.]
+    targetKey <- gsub(x = targetKeys, pattern = "[0-9]", replacement = "") %>%
+      table %>%
+      which.max %>%
+      targetKeys[.]
+
   }else{
+
     targetKey <- targetKeyCount %>% which.max %>% names
+
   }
 
   texts <- jsonContentFlat[lastKeys %in% targetKey] %>% unname
@@ -3509,7 +3538,7 @@ allJSONValues <- function(jsonContent, targetValues){
 
     ## open issue: todo: targetkey value index 12, merges to value12. And here i am just lucky,
     ## that there is one value8 in there. so too issues --value index12 merges too value12 and
-    ## then value12 matches also lengt(unique(.)) == 12
+    ## then value12 matches also length(unique(.)) == 12
     ## httpssjobsbrassringcomTgNewUISearchAjaxMatchedJobs.RData"
     match <- baseCandidates %>%
       do.call(what = rbind) %>%
@@ -3529,7 +3558,16 @@ allJSONValues <- function(jsonContent, targetValues){
 
       # example: https://cboe.wd1.myworkdayjobs.com/External_Career_CBOE
       # todo: very dirty: collecting more examples
-      if(tail(match, 1) == targetKey) match %<>% head(n = -1)
+      # another example would be having title5 as tail(match, 1)
+      # --> therefore need slim variant (without the numbers).
+      # test for both. tes5t==tes5t and test5==test (want both to succeed)
+      lastVal <- tail(match, 1)
+      lastValSlim <- gsub(
+        x = lastVal,
+        pattern = "[0-9]",
+        replacement = ""
+      )
+      if(tail(match, 1) == targetKey | lastValSlim == targetKey) match %<>% head(n = -1)
     }
 
   }
@@ -3647,6 +3685,7 @@ unpack_JSON <- function(response, targetKeys, base, baseFollow = NULL){
   # could go for rlist::list.flatten but how to ensure then that i have the elements of same length?
   # baseElems2 <- rlist::list.flatten(baseElems) %>% list ###### TRY ME
 
+  if(baseElems %>% unlist %>%  is.null) return(NULL)
   if(!length(baseElems)) return(NULL)
 
 

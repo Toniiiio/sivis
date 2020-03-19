@@ -1,3 +1,9 @@
+#todo:
+# startwert für seitenzahl. Wenn Wert 15,30,45, etc. brauch ich den absoluten wert als startwert, e.g. 15
+# wenn es seiten sind und ich auf seite 2 starte, dann wäre es 2*nr.
+# könnte also prüfen ob es ein wert kleiner als 5 ist.
+
+
 #
 # 1. Disassemble url in baseUrl and query parameters
 # 2. Identify pageChange and itemsize parameter
@@ -19,20 +25,58 @@ decodeUrl <- function(url){
     strsplit(split = "[?]") %>%
     unlist
 
+  baseUrl <- urlSplit[[1]]
+
+  subPages <- strsplit(
+    x = url,
+    split = "(?<!/)/(?!/)", #split on / but not on //
+    perl = TRUE
+  ) %>%
+    unlist %>%
+    {
+      data.frame(
+        val = .,
+        type = ifelse(test = is.na(suppressWarnings(as.numeric(.))), yes = "character", no = "numeric")
+      )
+    }
+
   if(length(urlSplit) == 1){
     return(
       list(
         baseUrl = baseUrl,
+        subPages = subPages,
         params = list()
       )
     )
   }
 
-  baseUrl <- urlSplit[[1]]
-  paramStrings <- urlSplit[[2]] %>%
-    strsplit(split = "&") %>%
-    lapply(FUN = strsplit, split = "=") %>%
-    unlist(recursive = FALSE)
+  ## possible seperators for query parameter (pairs) are & ; etc.
+  ## The resulting key value pairs are split by = ??
+  ## So if a successful seperator is found, all key value pair candidates will have to have include =.
+
+  querySeper = c("&", ";")
+
+  # i cant go for lengths == 2 for all, because after = could be empty, so an empty val right?
+  # if sep is unsuccesful it is one string which has a = in it. So testing for = alone is not enough.
+  sep <- querySeper[2]
+  for(sep in querySeper){
+    keyValues <- urlSplit[[2]] %>%
+      strsplit(split = sep)
+    paramStrings <- keyValues %>%
+      lapply(FUN = strsplit, split = "=") %>%
+      unlist(recursive = FALSE)
+
+
+    correctUnpack <- keyValues %>%
+      unlist %>%
+      sapply(FUN = function(str) stringr::str_count(string = str, pattern = "=") == 1) %>%
+      all
+
+    allKeyVal <- keyValues %>% unlist %>% grepl(pattern = "=") %>% all
+    correctSep <- correctUnpack & allKeyVal
+    if(correctSep) break
+  }
+
 
 
   key <- sapply(paramStrings, "[", 1)
@@ -42,26 +86,12 @@ decodeUrl <- function(url){
     {suppressWarnings(as.numeric(.))} %>%
     {ifelse(test = is.na(.), yes = "character", no = "numeric")}
 
-  subPages <- strsplit(
-    x = url,
-    split = "(?<!/)/(?!/)",
-    perl = TRUE
-  ) %>%
-  unlist %>%
-  {
-    data.frame(
-      val = .,
-      type = ifelse(test = is.na(suppressWarnings(as.numeric(.))), yes = "character", no = "numeric")
-    )
-  }
-  subPages
-
-
   list(
     url = url,
     baseUrl = baseUrl,
     params = params,
-    subPages = subPages
+    subPages = subPages,
+    querySeper = sep
   )
 }
 
@@ -91,9 +121,9 @@ encodeUrlFunc <- function(baseUrl, params){
 
 #getPageParameter(url)
 #url <- "https://careers.key.com/en-US/search?pagenumber=2"
-codeBefore <- sivis$reproduceForPageChange
-codeAfter <- sivis$reproduceForPageChange
-url <- sivis$url
+# codeBefore <- sivis$reproduceForPageChange
+# codeAfter <- sivis$reproduceForPageChange
+# url <- sivis$url
 
 
 getPageParameter_html_url <- function(url, codeBefore, codeAfter){
@@ -101,7 +131,7 @@ getPageParameter_html_url <- function(url, codeBefore, codeAfter){
   amtItems <- NULL
 
   decoded <- suppressWarnings(decodeUrl(url))
-  hasNumericParams <- nrow(decoded$params %>% filter(type == "numeric"))
+  hasNumericParams <- nrow(decoded$params %>% data.frame %>%  filter(type == "numeric"))
 
   if(!hasNumericParams){
     params <- decoded$subPages
@@ -109,7 +139,7 @@ getPageParameter_html_url <- function(url, codeBefore, codeAfter){
 
     tryCatch(eval(parse(text = codeBefore)), error = function(e) print(e))
     before <- response
-    #before <- do.call(cbind, data)
+    before <- do.call(cbind, data)
 
     out <- list()
     rowNr <- 2
@@ -126,7 +156,7 @@ getPageParameter_html_url <- function(url, codeBefore, codeAfter){
 
       tryCatch(eval(parse(text = codeAfter)), error = function(e) print(e))
       after <- response
-      # after <- do.call(cbind, data)
+      after <- do.call(cbind, data)
 
       diffResults <- !identical(after, before) & length(after)
       lengthMatch <- dim(data.frame(after))[1] == newVal
@@ -145,7 +175,8 @@ getPageParameter_html_url <- function(url, codeBefore, codeAfter){
       list(
         subPages = decoded$subPages,
         amtItems = amtItems,
-        pageChange = pageChange
+        pageChange = pageChange,
+        urlPart = "subPage"
       )
     )
 
@@ -153,67 +184,78 @@ getPageParameter_html_url <- function(url, codeBefore, codeAfter){
 
     params <- decoded$params
     filt <- params$key
-    initVal <- params$val %>% as.numeric()
-    newVal <- initVal*2
 
-    #mutate_when always fails
-    decoded$params[decoded$params$key == filt, ]$val <- newVal
+    numericParams <- params %>% dplyr::filter(type == "numeric")
 
-    response <- ""
-    before <- tryCatch(eval(parse(text = codeBefore)), error = function(e) NULL)
-    print(url)
-    url <- encodeUrl(decoded$baseUrl, decoded$params)
-    print(url)
-    after <- tryCatch(eval(parse(text = codeAfter)), error = function(e) NULL)
+    numericParams
+    rowNr <- 2
+    for(rowNr in nrow(numericParams)){
+      url <- sivis$url
+      initVal <- numericParams[rowNr, ]$val %>% as.numeric()
+      newVal <- initVal*2
+      currentKey  <- numericParams[rowNr, ]$key
 
-    # could also be just one column - should i first build the matrix and check then??
-    amtItemsBefore <- sapply(before, length) %>%
-      table %>%
-      .[1] %>%
-      names %>%
-      as.numeric()
+      #mutate_when always fails
+      decoded$params[decoded$params$key == currentKey, ]$val <- newVal
 
-    amtItemsAfter <- sapply(after, length) %>%
-      table %>%
-      .[1] %>%
-      names %>%
-      as.numeric()
+      response <- ""
+      before <- tryCatch(eval(parse(text = codeBefore)), error = function(e) NULL)
+      print(url)
+      url <- encodeUrl(decoded$baseUrl, decoded$params)
+      print(url)
+      after <- tryCatch(eval(parse(text = codeAfter)), error = function(e) NULL)
 
-    amtItems <- ""
-    pageChange <- ""
-    if(amtItemsAfter == newVal){
-      amtItems = decoded$params %>% dplyr::filter(key == filt)
-    }
-    print(amtItemsBefore)
-    print(amtItemsAfter)
-    print(identical(before, after))
-    if(!identical(before, after)){  # amtItemsBefore == amtItemsAfter &
-      pageChange = decoded$params %>% dplyr::filter(key == filt)
+      # could also be just one column - should i first build the matrix and check then??
+      amtItemsBefore <- sapply(before, length) %>%
+        table %>%
+        .[1] %>%
+        names %>%
+        as.numeric()
+
+      amtItemsAfter <- sapply(after, length) %>%
+        table %>%
+        .[1] %>%
+        names %>%
+        as.numeric()
+
+      amtItems <- ""
+      pageChange <- ""
+      if(amtItemsAfter == newVal){
+        amtItems = decoded$params %>% dplyr::filter(key == currentKey)
+      }
+      print(amtItemsBefore)
+      print(amtItemsAfter)
+      print(identical(before, after))
+
+      resultsChanged <- !identical(before, after)
+      if(resultsChanged){  # amtItemsBefore == amtItemsAfter &
+        pageChange = decoded$params %>% dplyr::filter(key == currentKey)
+      }
     }
 
     fixParams <- decoded$params %>% dplyr::filter(not(key %in% c(pageChange, amtItems)))
+
 
     return(
       list(
         pageChange = pageChange,
         amtItems = amtItems,
         baseUrl = decoded$baseUrl,
-        fixParams = fixParams
+        fixParams = fixParams,
+        urlPart = "queryParams"
       )
     )
-
   }
-
 }
 
-codeBefore <- sivis$reproduceForPageChange
-codeAfter <- sivis$reproduceForPageChange
-url <- sivis$url
-getPageParameter_html_url(url, codeBefore, codeAfter)
+# codeBefore <- sivis$reproduceForPageChange
+# codeAfter <- sivis$reproduceForPageChange
+# url <- sivis$url
+# getPageParameter_html_url(url, codeBefore, codeAfter)
 
 
 
-url <- sivis$url
+# url <- sivis$url
 getPageParameter <- function(url, codeBefore, codeAfter){
   pageChange <- NULL
   amtItems <- NULL
@@ -223,14 +265,14 @@ getPageParameter <- function(url, codeBefore, codeAfter){
   params <- decoded$params %>% dplyr::filter(type == "numeric")
 
   out <- list()
-  xx <- 1
-
   response <- ""
   tryCatch(eval(parse(text = codeBefore)), error = function(e) print(e))
   before <- unlist(output)
-  for(xx in 1:length(params$key)){
-    filt <- params$key[xx]
-    initVal <- params$val[xx]
+
+  paramNr <- 3
+  for(paramNr in 1:length(params$key)){
+    filt <- params$key[paramNr]
+    initVal <- params$val[paramNr]
 
     newValStr <- glue("', {initVal}*nr,'")
     newVal <- as.numeric(initVal)*2
@@ -251,7 +293,7 @@ getPageParameter <- function(url, codeBefore, codeAfter){
     differentResults <- !identical(after, before)
     lengthMatch <- dim(data.frame(after))[1] == newVal
 
-    out[[xx]] <- c(differentResults, lengthMatch)
+    out[[paramNr]] <- c(differentResults, lengthMatch)
   }
   mat <- do.call(what = rbind, args = out)
   colnames(mat) <- c("diffContent", "lengthMatch")
@@ -264,7 +306,10 @@ getPageParameter <- function(url, codeBefore, codeAfter){
   itemSizeSuccess <- ""
   if(length(itemsPerPage)){
 
-    initVal <- decoded$params %>% dplyr::filter(key == itemsPerPage) %>% dplyr::select(val)
+    initVal <- decoded$params %>%
+      dplyr::filter(key == itemsPerPage) %>%
+      dplyr::select(val)
+
     itemSizes <- c(25, 50, 100, 200, 500, 1000)
     multiples <- itemSizes / as.numeric(initVal)
 
@@ -278,7 +323,11 @@ getPageParameter <- function(url, codeBefore, codeAfter){
       parms <- decoded$params
       parms[parms$key == itemsPerPage, ]$val <- newValStr
 
-      scraper$urlGen <- encodeUrlFunc(baseUrl = decoded$baseUrl, params = parms)
+      scraper$urlGen <- encodeUrlFunc(
+        baseUrl = decoded$baseUrl,
+        params = parms
+      )
+
       url <- scraper$urlGen(nr)
       print(url)
       output <- list()
@@ -291,16 +340,24 @@ getPageParameter <- function(url, codeBefore, codeAfter){
       success[itemSizeNr] <- lengthMatch
     }
     itemSizeSuccess <- success %>% setNames(itemSizes)
-    itemSize <- itemSizeSuccess %>% which %>% tail(1) %>% names
-
-    parms <- decoded$params
-    parms[parms$key == itemsPerPage, ]$val <- itemSize
+    itemSize <- itemSizeSuccess %>%
+      which %>%
+      tail(1) %>%
+      names
   }
 
+  # need fresh decoded$params otherwise they overwrite each other.
+  # could refactor.
   if(length(pageChange)){
+    parms <- decoded$params
     initVal <- parms[parms$key == pageChange, ]$val
     parms[parms$key == pageChange, ]$val <- glue("', {initVal}*nr,'")
   }
+
+  if(length(itemsPerPage)){
+    parms[parms$key == itemsPerPage, ]$val <- itemSize
+  }
+
 
   scraper$urlGen <- encodeUrlFunc(baseUrl = decoded$baseUrl, params = parms)
 
@@ -309,7 +366,7 @@ getPageParameter <- function(url, codeBefore, codeAfter){
       pageChange = pageChange,
       itemsPerPage = itemsPerPage,
       baseUrl = decoded$baseUrl,
-      itemSites = itemSizeSuccess,
+      itemSizes = itemSizeSuccess,
       urlGen = scraper$urlGen
     )
   )
@@ -317,11 +374,11 @@ getPageParameter <- function(url, codeBefore, codeAfter){
 
 # url <- "https://careers.key.com/en-US/search?pagenumber=2"
 # load("dynamicUrl/dynamicUrl_chipotle.RData")
-codeBefore <- paste(sivis$xhrHeader, sivis$xhrRequest, collapse = "\n")
-codeAfter <- sivis$xhrRequest
-url <- sivis$url
-done <- getPageParameter(url = url, codeBefore = codeBefore, codeAfter = codeAfter)
-#save(sivis, file = "dynamicUrl/dynamicUrl_republic.RData")
+# codeBefore <- paste(sivis$xhrHeader, sivis$xhrRequest, collapse = "\n")
+# codeAfter <- sivis$xhrRequest
+# url <- sivis$url
+# done <- getPageParameter(url = url, codeBefore = codeBefore, codeAfter = codeAfter)
+# save(sivis, file = "dynamicUrl/dynamicUrl_dow.RData")
 
 urlGenWithSubPages <- function(splitForPage){
   subPages <- splitForPage$subPages
@@ -351,8 +408,9 @@ urlGenCode <- function(splitForPage){
   fixParamUrl <- apply(fixP[, 1:2], 1, paste0, collapse = "=") %>%
     paste(collapse = "&")
 
+  initVal <- splitForPage$pageChange$val %>% as.numeric %>% magrittr::divide_by(2)
   str <- paste0(
-    "function(val){paste0(\"", splitForPage$baseUrl, "?", fixParamUrl, "&", splitForPage$pageChange$key, "=\", val)}"
+    "function(nr){paste0(\"", splitForPage$baseUrl, "?", fixParamUrl, "&", splitForPage$pageChange$key, "=\", nr*", initVal,")}"
   )
 
   urlGen <- eval(parse(text = str))
@@ -365,39 +423,55 @@ urlGenCode <- function(splitForPage){
 }
 
 
-###### HTML+URL html url
+###### HTML+URL html url url+html
 
-requestCode <- sivis$reproduceForPageChange
+# requestCode <- sivis$reproduceForPageChange
 dynamicUrl <- function(url, requestCode){
   # 1. Disassemble url in baseUrl and query parameters
   # 2. Identify pageChange and itemsize parameter
-  splitForPage <- suppressWarnings(getPageParameter_html_url(url, codeBefore = requestCode, codeAfter = requestCode))
-
-  # 3. Build new url as a function with fixed itemsize and variable pagechange
-  func <- urlGenCode(splitForPage)$urlGen
-  initVal <- splitForPage$pageChange$val %>% as.numeric %>% magrittr::divide_by(2)
-
-  list(
-    func = func,
-    initVal = initVal
+  splitForPage <- suppressWarnings(
+    getPageParameter_html_url(
+      url = url,
+      codeBefore = requestCode,
+      codeAfter = requestCode
+    )
   )
+
+  if(splitForPage$urlPart == "subPages"){
+
+    urlGen <- urlGenWithSubPages(splitForPage)$urlGen
+    urlGen(1)
+
+  }else{ #splitForPage$urlPart == "queryParams"
+
+    # 3. Build new url as a function with fixed itemsize and variable pagechange
+    func <- urlGenCode(splitForPage)$urlGen
+    initVal <- splitForPage$pageChange$val %>% as.numeric %>% magrittr::divide_by(2)
+
+    return(
+      list(
+        func = func,
+        initVal = initVal
+      )
+    )
+  }
 }
 
-url <- sivis$cbData$request$request$url
-requestCode <- sivis$reproduceForPageChange
-dynamicUrl(url, requestCode)
-
-#save(sivis, file = "dynamicUrl/dynamicUrl_ansys.RData")
+# url <- sivis$cbData$request$request$url
+# requestCode <- sivis$reproduceForPageChange
+# xx <- dynamicUrl(url, requestCode)
+# xx$func(1)
+#save(sivis, file = "dynamicUrl/dynamicUrl_dteenergy.RData")
 #load("dynamicUrl/dynamicUrl_chipotle.RData")
 
 
 
 
-url <- sivis$url
-requestCode <- sivis$reproduceForPageChange
-splitForPage <- suppressWarnings(getPageParameter_html_url(url, codeBefore = requestCode, codeAfter = requestCode))
-func <- urlGenWithSubPages(splitForPage)$urlGen
-func(2)
+# url <- sivis$url
+# requestCode <- sivis$reproduceForPageChange
+# splitForPage <- suppressWarnings(getPageParameter_html_url(url, codeBefore = requestCode, codeAfter = requestCode))
+# func <- urlGenWithSubPages(splitForPage)$urlGen
+# func(2)
 
 
 
@@ -415,51 +489,60 @@ decodyBody <- function(body){
     {ifelse(test = is.na(.), yes = "character", no = "numeric")}
   params
 }
-itemSizeNr <- decodyBody(body)
+# itemSizeNr <- decodyBody(body)
 
 encodeBody <- function(baseUrl, params){
   data.frame(itemSizeNr$val) %>% setNames(itemSizeNr$key) %>% toJSON
 }
 
-itemSizeNr[, 1:2] %>% toJSON
-T
 
 
 # > sivis$headerBody
 # [1] "partnerId=25678&siteId=5275&keyword=&location=&keywordCustomSolrFields=AutoReq%2CFORMTEXT8%2CFORMTEXT7&locationCustomSolrFields=FORMTEXT2&facetfilterfields=&turnOffHttps=false&Latitude=0&Longitude=0&encryptedsessionvalue=%5EXlE1U_slp_rhc_4NP8rygPLgWYnRMDcP72sQG2OKZlb%2FKzYg_slp_rhc_Dw32OQlCRdWW63tnxlbBUaTHKkvIABE80xVjSfk%2FTp7SxAKL96vEaveyHZlZRJcAbk%3D"
 
-bodyDecoded <- sivis$headerBody %>% fromJSON()
-isInteger <- suppressWarnings(!is.na(sapply(x, as.integer)))
+# bodyDecoded <- sivis$headerBody %>% fromJSON()
+# isInteger <- suppressWarnings(!is.na(sapply(x, as.integer)))
 
-nrr <- 13
-for(nrr in which(isInteger)){
+# nrr <- 13
+# for(nrr in which(isInteger)){
+#
+#   eval(parse(text = sivis$xhrHeader))
+#   eval(parse(text = sivis$xhrRequest))
+#   before <- output
+#
+#   bodyDecoded[[nrr]] <-  as.numeric(bodyDecoded[[nrr]])*2
+#   scraper$body <- bodyDecoded %>% toJSON(auto_unbox = TRUE)
+#   eval(parse(text = sivis$xhrRequest))
+#   after <- output
+#
+#   identical(before, after)
+# }
 
-  eval(parse(text = sivis$xhrHeader))
-  eval(parse(text = sivis$xhrRequest))
-  before <- output
 
-  bodyDecoded[[nrr]] <-  as.numeric(bodyDecoded[[nrr]])*2
-  scraper$body <- bodyDecoded %>% toJSON(auto_unbox = TRUE)
-  eval(parse(text = sivis$xhrRequest))
-  after <- output
+####### URL+JSON+URL
+# url <- "https://jobs.chipotle.com/search-jobs/results?ActiveFacetID=0&CurrentPage=2&RecordsPerPage=15&Distance=50&RadiusUnitType=0&Keywords=&Location=&Latitude=&Longitude=&ShowRadius=False&CustomFacetName=&FacetTerm=&FacetType=0&SearchResultsModuleName=Search+Results&SearchFiltersModuleName=Search+Filters&SortCriteria=0&SortDirection=0&SearchType=5&CategoryFacetTerm=&CategoryFacetType=&LocationFacetTerm=&LocationFacetType=&KeywordType=&LocationType=&LocationPath=&OrganizationIds=&PostalCode=&fc=&fl=&fcf=&afc=&afl=&afcf="
+# url <- "https://corporate.dow.com/.corporate-search.servlet.json/?x1=ContentType;q1=Job;x7=JobEndDateEpoch;sp_q_min_7=1584384051;page=2;sp_s=StartDate"
 
-  identical(before, after)
+# url = sivis$url
+# headerCode = sivis$xhrHeader(urlFunc = glue("function(nr){{'{pageUrl}'}}"))
+# requestCode = sivis$xhrRequest
+
+getUrlJSONPageChange <- function(url, headerCode, requestCode){
+  url <- sivis$url
+  decoded <- decodeUrl(url = url)
+  codeBefore <- paste(headerCode, requestCode, collapse = "\n")
+  codeAfter <- requestCode
+  splitForPage <- suppressWarnings(
+    getPageParameter(
+      url = url,
+      codeBefore = codeBefore,
+      codeAfter = codeAfter
+    )
+  )
+
+  return(splitForPage$urlGen)
 }
 
-
-
-identical(xx, sivis$headerBody)
-
-
-####### URL JSON
-url <- "https://jobs.chipotle.com/search-jobs/results?ActiveFacetID=0&CurrentPage=2&RecordsPerPage=15&Distance=50&RadiusUnitType=0&Keywords=&Location=&Latitude=&Longitude=&ShowRadius=False&CustomFacetName=&FacetTerm=&FacetType=0&SearchResultsModuleName=Search+Results&SearchFiltersModuleName=Search+Filters&SortCriteria=0&SortDirection=0&SearchType=5&CategoryFacetTerm=&CategoryFacetType=&LocationFacetTerm=&LocationFacetType=&KeywordType=&LocationType=&LocationPath=&OrganizationIds=&PostalCode=&fc=&fl=&fcf=&afc=&afl=&afcf="
-url <- sivis$url
-#decoded <- decodeUrl(url = sivis$url)
-
-codeBefore <- paste(sivis$xhrHeader, sivis$xhrRequest, collapse = "\n")
-codeAfter <- sivis$xhrRequest
-splitForPage <- suppressWarnings(getPageParameter(url = url, codeBefore = codeBefore, codeAfter = codeAfter))
-urlGenCode(splitForPage)
 
 # decoded
 # scraper$urlGen
@@ -469,7 +552,7 @@ urlGenCode(splitForPage)
 # }'
 
 
-encodeUrl(decoded$baseUrl, decoded$params)
+# encodeUrl(decoded$baseUrl, decoded$params)
 
 
 ##examples - open issues
@@ -487,15 +570,15 @@ c("RecordPerPage", "from", "num_items", "items_per_page", "pageSize", "itemsPerP
 "https://viacomcbs.careers/jobs/" # url
 "https://viacomcbs.careers/jobs/#1" # sivis$browserOutput$pageUrl
 
-url <- "https://de.ccep.jobs/search-jobs/results?ActiveFacetID=0&CurrentPage=2&RecordsPerPage=14&Distance=50&RadiusUnitType=0&Keywords=&Location=&Latitude=&Longitude=&ShowRadius=False&CustomFacetName=&FacetTerm=&FacetType=0&SearchResultsModuleName=Search+Results&SearchFiltersModuleName=Search+Filters&SortCriteria=0&SortDirection=0&SearchType=5&CategoryFacetTerm=&CategoryFacetType=&LocationFacetTerm=&LocationFacetType=&KeywordType=&LocationType=&LocationPath=&OrganizationIds=&PostalCode=&fc=&fl=&fcf=&afc=&afl=&afcf="
-url <- "https://jobs.boeing.com/search-jobs/results?ActiveFacetID=0&CurrentPage=2&RecordsPerPage=15&Distance=50&RadiusUnitType=0&Keywords=&Location=&Latitude=&Longitude=&ShowRadius=False&CustomFacetName=&FacetTerm=&FacetType=0&SearchResultsModuleName=Search+Results&SearchFiltersModuleName=Search+Filters&SortCriteria=0&SortDirection=1&SearchType=5&CategoryFacetTerm=&CategoryFacetType=&LocationFacetTerm=&LocationFacetType=&KeywordType=&LocationType=&LocationPath=&OrganizationIds=&PostalCode=&fc=&fl=&fcf=&afc=&afl=&afcf="
-url <- "https://uscareers-waters.icims.com/jobs/search?pr=1&schemaId=&o=&in_iframe=1"
-url <- "https://careers.nrgenergy.com/search/?q=&sortColumn=referencedate&sortDirection=desc&startrow=25"
-
-url <- "https://career.be-lufthansa.com/globaljobboard_api/search/?data=%7B%22LanguageCode%22%3A%22DE%22%2C%22SearchParameters%22%3A%7B%22FirstItem%22%3A1%2C%22CountItem%22%3A10000%2C%22Sort%22%3A%5B%7B%22Criterion%22%3A%22PublicationStartDate%22%2C%22Direction%22%3A%22DESC%22%7D%5D%2C%22MatchedObjectDescriptor%22%3A%5B%22ID%22%2C%22PositionTitle%22%2C%22PositionURI%22%2C%22PositionLocation.CountryName%22%2C%22PositionLocation.CityName%22%2C%22PositionLocation.Longitude%22%2C%22PositionLocation.Latitude%22%2C%22PositionLocation.PostalCode%22%2C%22PositionLocation.StreetName%22%2C%22PositionLocation.BuildingNumber%22%2C%22PositionLocation.Distance%22%2C%22JobCategory.Name%22%2C%22PublicationStartDate%22%2C%22ParentOrganizationName%22%2C%22LogoURI%22%2C%22OrganizationShortName%22%2C%22CareerLevel.Name%22%2C%22JobSector.Name%22%2C%22PositionIndustry.Name%22%2C%22PublicationCode%22%2C%22UserAreaEsaApprenticeship%22%2C%22UserAreaEsaApprenticeshipLocation%22%5D%7D%2C%22SearchCriteria%22%3A%5B%5D%7D"
-url <- "https://api-deutschebank.beesite.de/search/?data={%22LanguageCode%22:%22DE%22,%22SearchParameters%22:{%22FirstItem%22:1,%22CountItem%22:10,%22Sort%22:[{%22Criterion%22:%22PublicationStartDate%22,%22Direction%22:%22DESC%22}],%22MatchedObjectDescriptor%22:[%22PositionID%22,%22PositionTitle%22,%22PositionURI%22,%22ScoreThreshold%22,%22OrganizationName%22,%22PositionFormattedDescription.Content%22,%22PositionLocation.CountryName%22,%22PositionLocation.CountrySubDivisionName%22,%22PositionLocation.CityName%22,%22PositionLocation.Longitude%22,%22PositionLocation.Latitude%22,%22PositionIndustry.Name%22,%22JobCategory.Name%22,%22CareerLevel.Name%22,%22PositionSchedule.Name%22,%22PositionOfferingType.Name%22,%22PublicationStartDate%22,%22UserArea.GradEduInstCountry%22,%22PositionImport%22,%22PositionHiringYear%22]},%22SearchCriteria%22:[]}"
-url <- "https://careers.leidos.com/search/jobs/in?page=2"
-url <- "https://careers-martinmarietta.icims.com/jobs/search?pr=1&schemaId=&o="
+# url <- "https://de.ccep.jobs/search-jobs/results?ActiveFacetID=0&CurrentPage=2&RecordsPerPage=14&Distance=50&RadiusUnitType=0&Keywords=&Location=&Latitude=&Longitude=&ShowRadius=False&CustomFacetName=&FacetTerm=&FacetType=0&SearchResultsModuleName=Search+Results&SearchFiltersModuleName=Search+Filters&SortCriteria=0&SortDirection=0&SearchType=5&CategoryFacetTerm=&CategoryFacetType=&LocationFacetTerm=&LocationFacetType=&KeywordType=&LocationType=&LocationPath=&OrganizationIds=&PostalCode=&fc=&fl=&fcf=&afc=&afl=&afcf="
+# url <- "https://jobs.boeing.com/search-jobs/results?ActiveFacetID=0&CurrentPage=2&RecordsPerPage=15&Distance=50&RadiusUnitType=0&Keywords=&Location=&Latitude=&Longitude=&ShowRadius=False&CustomFacetName=&FacetTerm=&FacetType=0&SearchResultsModuleName=Search+Results&SearchFiltersModuleName=Search+Filters&SortCriteria=0&SortDirection=1&SearchType=5&CategoryFacetTerm=&CategoryFacetType=&LocationFacetTerm=&LocationFacetType=&KeywordType=&LocationType=&LocationPath=&OrganizationIds=&PostalCode=&fc=&fl=&fcf=&afc=&afl=&afcf="
+# url <- "https://uscareers-waters.icims.com/jobs/search?pr=1&schemaId=&o=&in_iframe=1"
+# url <- "https://careers.nrgenergy.com/search/?q=&sortColumn=referencedate&sortDirection=desc&startrow=25"
+#
+# url <- "https://career.be-lufthansa.com/globaljobboard_api/search/?data=%7B%22LanguageCode%22%3A%22DE%22%2C%22SearchParameters%22%3A%7B%22FirstItem%22%3A1%2C%22CountItem%22%3A10000%2C%22Sort%22%3A%5B%7B%22Criterion%22%3A%22PublicationStartDate%22%2C%22Direction%22%3A%22DESC%22%7D%5D%2C%22MatchedObjectDescriptor%22%3A%5B%22ID%22%2C%22PositionTitle%22%2C%22PositionURI%22%2C%22PositionLocation.CountryName%22%2C%22PositionLocation.CityName%22%2C%22PositionLocation.Longitude%22%2C%22PositionLocation.Latitude%22%2C%22PositionLocation.PostalCode%22%2C%22PositionLocation.StreetName%22%2C%22PositionLocation.BuildingNumber%22%2C%22PositionLocation.Distance%22%2C%22JobCategory.Name%22%2C%22PublicationStartDate%22%2C%22ParentOrganizationName%22%2C%22LogoURI%22%2C%22OrganizationShortName%22%2C%22CareerLevel.Name%22%2C%22JobSector.Name%22%2C%22PositionIndustry.Name%22%2C%22PublicationCode%22%2C%22UserAreaEsaApprenticeship%22%2C%22UserAreaEsaApprenticeshipLocation%22%5D%7D%2C%22SearchCriteria%22%3A%5B%5D%7D"
+# url <- "https://api-deutschebank.beesite.de/search/?data={%22LanguageCode%22:%22DE%22,%22SearchParameters%22:{%22FirstItem%22:1,%22CountItem%22:10,%22Sort%22:[{%22Criterion%22:%22PublicationStartDate%22,%22Direction%22:%22DESC%22}],%22MatchedObjectDescriptor%22:[%22PositionID%22,%22PositionTitle%22,%22PositionURI%22,%22ScoreThreshold%22,%22OrganizationName%22,%22PositionFormattedDescription.Content%22,%22PositionLocation.CountryName%22,%22PositionLocation.CountrySubDivisionName%22,%22PositionLocation.CityName%22,%22PositionLocation.Longitude%22,%22PositionLocation.Latitude%22,%22PositionIndustry.Name%22,%22JobCategory.Name%22,%22CareerLevel.Name%22,%22PositionSchedule.Name%22,%22PositionOfferingType.Name%22,%22PublicationStartDate%22,%22UserArea.GradEduInstCountry%22,%22PositionImport%22,%22PositionHiringYear%22]},%22SearchCriteria%22:[]}"
+# url <- "https://careers.leidos.com/search/jobs/in?page=2"
+# url <- "https://careers-martinmarietta.icims.com/jobs/search?pr=1&schemaId=&o="
 
 
 # fls <- list.files(path = "R/fromWeb/",pattern = "*.RData")
