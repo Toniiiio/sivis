@@ -1,3 +1,6 @@
+
+
+
 #### new potential job source
 ## scale over company id
 ##  "https://jobsapi-internal.m-cloud.io/api/job?callback=jobsCallback&offset=11&sortfield=open_date&sortorder=descending&Limit=10&Organization=1909"
@@ -5,6 +8,9 @@
 ### Randbedingungen
 # - nur Textdaten
 # - wenn mehrere Daten/Seiten, auf 2-X Seite gehen, weil dann alle Parameter da sind.
+
+# cant find follow pages but have data
+# https://paychex.recsolu.com/job_boards/bMMxAXjFgvU0PrJcH0lNgw
 
 #https://www.teleflex.com/emea/de/careers/index.html
 #todo:leafpathes
@@ -259,7 +265,7 @@ library(dplyr)
 
 #debugSource("~/sivis/rvestFunctions.R")
 
-
+source("QueryParams/createNewUrl.R")
 sivis <- new.env(parent = emptyenv())
 sivis$GETContents <- list()
 
@@ -1165,7 +1171,13 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list(), r
       pattern = "[0-9]",
       replacement = ""
     )
-    if(lastVal == JSONValues$targetKey | lastValSlim == JSONValues$targetKey) JSONValues$base %<>% head(n = -1)
+
+    print(lastVal)
+    if(!is.null(lastVal) & !is.null(JSONValues$targetKey)){
+      if(lastVal == JSONValues$targetKey | lastValSlim == JSONValues$targetKey){
+        JSONValues$base %<>% head(n = -1)
+      }
+    }
     print(JSONValues$base)
 
     sivis$neighbours <- JSONValues$neighbours
@@ -1568,7 +1580,7 @@ create_Addit_Extract <- function(extractPathes){
     path <- extractPathes[type] %>% unlist %>% unname
     if(type == "xpath"){
       return(
-        glue("\tresponse %<>% read_html %>% html_nodes(xpath = '{path}') %>% html_text")
+        glue("\tresponse <- tryCatch(expr = response %>% read_html %>% html_nodes(xpath = '{path}') %>% html_text, error = function(e) NULL)")
       )
     }
   }
@@ -1584,7 +1596,8 @@ create_Addit_Extract <- function(extractPathes){
 # does not cover: follow-up process of html or only html
 baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys = NULL, extractPathes, reqMethod = "GET", body = NULL, headers = NULL, useHeader = FALSE){
 
-  xpath <- paste0("\tresponse %<>% read_html %>% html_nodes(xpath = '", extractPathes$xpath$xpath, "') %>% html_text")
+
+  xpath <- paste0("\tresponse <- tryCatch(expr = response %>% read_html %>% html_nodes(xpath = '", extractPathes$xpath$xpath, "') %>% html_text, error = function(e) NULL)")
 
   # todo: what if they are multiple extractions. then index differently
   indexes <- extractPathes$scriptJsonIndex[[1]]$JSONIdx
@@ -1873,7 +1886,7 @@ createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathe
 }
 
 createDocument <- function(pageUrl, extractPathes, responseString, testEval = FALSE, reqMethod = "GET", useHeader = FALSE, body = NULL, XPathes = ""){
-  print("xxxxs")
+  print("createDocument")
   # XPathes <- sivis$XPathes
   OneXPathOnly <- TRUE #length(XPathes) == 1
   fileName <- sivis[["fileName"]]
@@ -1918,35 +1931,93 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
 
     sivis$xhrRequest <- paste(c(getTemplate$request, getFinishTemplate), collapse = "\n")
 
-    sivis$reproduceForPageChange <- paste(sivis$xhrHeader, sivis$xhrRequest, collapse = "\n")
+    urlFunc  <- glue("function(nr){{'{sivis$url}'}}")
+    urlFunc <- getUrlJSONPageChange(
+      url = sivis$url,
+      headerCode = sivis$xhrHeader(urlFunc = urlFunc),
+      requestCode = sivis$xhrRequest
+    )
+
+    newUrlFunc <- urlFunc %>%
+      deparse %>%
+      trimws %>%
+      paste(collapse = "")
+
+    sivis$reproduceForPageChange <- paste(
+      sivis$xhrHeader(urlFunc = newUrlFunc),
+      sivis$xhrRequest,
+      collapse = "\n"
+    )
     displayResults <- "do.call(rbind, output) %>% c %>% data.frame %>% DT::datatable()"
 
   }else{
+    ####### go here for html
+
+    ### initial request for single page and base code for multi page to give into getUrlJSONPageChange
+
     # config parameter should i include empty header to make it more easy to add some?
-    getTemplate <- paste0(c(paste0(c('response <- url %>% GET', hdr,' %>% content(type = "text")'), collapse = ""),
-                            '#response %>% showHtmlPage',
-                            'xpath <- data.frame(',
-                            paste(c('\t"', XPathes, '"'), collapse = ""),
-                            ')',
-                            'response %<>% read_html %>% html_nodes(xpath = as.character(xpath)) %>% html_text()'
+    getTemplate <- paste0(c(paste0(c(
+      '',
+      'response <- url %>% GET', hdr,' %>% content(type = "text")'), collapse = ""),
+      '#response %>% showHtmlPage',
+      'xpath <- data.frame(',
+      paste(c('\t"', XPathes, '"'), collapse = ""),
+      ')',
+      'response <- tryCatch(\n\texpr = response %>% read_html %>% html_nodes(xpath = as.character(xpath)) %>% html_text(), \n\terror = function(e) NULL\n)'
     ), collapse = "\n"
     )
+
+    urlFunc <- dynamicUrl(
+      url = sivis$url,
+      requestCode = getTemplate
+    )$func
+
+    isMultiPage <- !is.null(urlFunc)
+
     getFinishTemplate <- ""
     indent <- ""
-    libCall <-paste0(c(
-      'library(httr)',
-      'library(DT)',
-      paste0('url <- "', pageUrl, '"')),
-      collapse = "\n"
-    )
+    if(isMultiPage){
+      libCall <-paste0(c(
+        'library(httr)',
+        'library(DT)',
+        paste0(c('urlGen <- ', urlFunc %>% safeDeparse()), collapse = ""),
+        'nr <- 1',
+        'hasResult <- TRUE',
+        'output <- list()',
+        '',
+        'while(hasResult){',
+        '\tprint(nr)',
+        '\turl <- urlGen(nr)'
+        ),
+        collapse = "\n"
+      )
+      # todo: very dirty
+      getTemplate %<>% gsub(pattern = "\n", replacement = "\n\t")
+      displayResults <- paste0(c(
+        '\thasResult <- length(response)',
+        '\toutput[[nr]] <- response',
+        'nr <- nr + 1',
+        '}',
+        '',
+        'output %>% lapply(FUN = data.frame) %>% do.call(what = rbind) %>% DT::datatable()'
+      ), collapse = "\n")
 
+    }else{
+      libCall <-paste0(c(
+        'library(httr)',
+        'library(DT)',
+        paste0('url <- "', pageUrl, '"')),
+        collapse = "\n"
+      )
+      displayResults <- 'response %>% data.frame %>% DT::datatable()'
+    }
+
+    # todo: do i still need this reproduce? already did it here?
     sivis$reproduceForPageChange <- paste(c(
       getTemplate,
       getFinishTemplate
     ), collapse = "\n")
 
-
-    displayResults <- 'response %>% data.frame %>% DT::datatable()'
   }
 
   # sivis$cbData$request$request$url
@@ -2137,7 +2208,7 @@ updateDocument <- function(XPathes, rootXPath, pageUrl, selectedCol, doc = getAc
   sivis$reproduceForPageChange <- paste0(
     c('xpathes <- ', paste(c(paste(c("data.frame(", glue("XPath{1:amtXP} = '{XPathes}'{c(rep(',', amtXP - 1), '')}\n\t")), collapse = "\n\t"), ")"), collapse = "\n"),
     'nodes <- read_html(x = url) %>% html_nodes(xpath = ', rootXPath %>% safeDeparse,')',
-    'data <- lapply(xpathes, function(xpath){',
+    'response <- lapply(xpathes, function(xpath){',
     '\tlapply(nodes, function(node) html_nodes(x = node, xpath = xpath) %>% {ifelse(length(.), yes = html_text(.), no = NA)}) %>% unlist',
     '})'), collapse = "\n")
 
@@ -3651,8 +3722,6 @@ unpack_JSON <- function(response, targetKeys, base, baseFollow = NULL){
 
   splitNames <- names(contentGETFlat) %>% strsplit(split = "[.]")
   lastKeys <- sapply(X = splitNames, FUN = tail, n = 1)
-
-  base
 
   # todo;do i neeed two of these subsetbystr functions?
   # todo; refactor
