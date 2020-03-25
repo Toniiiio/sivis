@@ -73,6 +73,7 @@
 # Automatisches testen für die kreierung von den scrapern bauen.
 
 # invalid access 403: https://careers.westerndigital.com/jobs/search/4107581/page2
+#https://www.rewe.de/angebote/hamburg/540724/rewe-markt-waldweg-43/
 # empty site: https://recruiting.adp.com/srccar/public/RTI.home?c=1214601&d=ExternalCareerSite
 
 # Notation:
@@ -451,7 +452,7 @@ create_sivis <- function(cbData){
     USE.NAMES = FALSE
   ) %>%
     {sum(.) / length(.)} %>%
-    magrittr::is_less_than(0.6)
+    magrittr::is_less_than(0.4)
 
   if(noHeaderFailed & withHeaderFailed) stop("request failed with and without headers.")
 
@@ -938,6 +939,13 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
         )
       }
 
+      sivis$reqMethod <- reqMethod
+      sivis$responseString <- responseString
+      sivis$extractPathes <- extractPathes
+      sivis$body <- body
+      sivis$XPathes <- XPathes
+      sivis$testEval <- testEval
+
       testEval <- createDocument(
         pageUrl = pageUrl,
         reqMethod = reqMethod,
@@ -995,7 +1003,8 @@ createDocumentGETWrap <- function(targetKeys){
     reqMethod = reqMethod,
     headers = headers,
     useHeader = useHeader,
-    body = body
+    body = body,
+    searchMultiPage = FALSE
   )
 }
 
@@ -1756,7 +1765,8 @@ safeDeparse <- function(expr){
   gsub("[[:space:]][[:space:]]+", " ", ret)
 }
 
-createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathes = extractPathes, testEval = FALSE, reqMethod = "GET", headers = NULL, useHeader = FALSE, body = NULL){
+createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathes = extractPathes, testEval = FALSE,
+                              reqMethod = "GET", headers = NULL, useHeader = FALSE, body = NULL, searchMultiPage = TRUE){
   # need this later for the .rmd file, to get additional fields from the get/post request
   print("createDocumentGET")
   # fileName <- sivis[["fileName"]]
@@ -1801,16 +1811,21 @@ createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathe
   # now i have all info available to test for potential page change / item size parameter
   # i need sivis$url, sivis$xhrRequest, sivis$xhrHeader
 
-  urlFunc <- getUrlJSONPageChange(
-    url = sivis$url,
-    headerCode = sivis$xhrHeader(urlFunc = glue("function(nr){{'{pageUrl}'}}")),
-    requestCode = sivis$xhrRequest
-  )
+  if(searchMultiPage){
+    urlFunc <- getUrlJSONPageChange(
+      url = sivis$url,
+      headerCode = sivis$xhrHeader(urlFunc = glue("function(nr){{'{pageUrl}'}}")),
+      requestCode = sivis$xhrRequest
+    )
 
-  newUrlFunc <- urlFunc %>%
-    deparse %>%
-    trimws %>%
-    paste(collapse = "")
+    newUrlFunc <- urlFunc %>%
+      deparse %>%
+      trimws %>%
+      paste(collapse = "")
+    sivis$pageUrl <- newUrlFunc
+  }else{
+    newUrlFunc <- sivis$pageUrl
+  }
 
   sivis$reproduceForPageChange <- paste(c(
     baseGet$headers(urlFunc = newUrlFunc),
@@ -1872,7 +1887,7 @@ createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathe
                     ')',
                     'server <- function(input, output, session){',
                     '\tobserveEvent(eventExpr = input$updateDocument,{',
-                    '\t\tfile.remove("Notebook_Scraping.Rmd")',
+                    '#\t\tfile.remove("Notebook_Scraping.Rmd")',
                     '\t\tsivis$targetKeys <-  c(sivis$targetKeys, input$additionalKeys)',
                     '\t\tcreateDocumentGETWrap(targetKeys = sivis$targetKeys)',
                     '\t\tstopApp(returnValue = invisible())',
@@ -1885,7 +1900,9 @@ createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathe
   file.edit(fileName)
 }
 
-createDocument <- function(pageUrl, extractPathes, responseString, testEval = FALSE, reqMethod = "GET", useHeader = FALSE, body = NULL, XPathes = ""){
+createDocument <- function(pageUrl, extractPathes, responseString, testEval = FALSE, reqMethod = "GET", Code_3_Extract = NULL,
+                           useHeader = FALSE, body = NULL, XPathes = "", searchMultiCols = TRUE, rCode = NULL){
+
   print("createDocument")
   # XPathes <- sivis$XPathes
   OneXPathOnly <- TRUE #length(XPathes) == 1
@@ -1938,49 +1955,65 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
       requestCode = sivis$xhrRequest
     )
 
-    newUrlFunc <- urlFunc %>%
-      deparse %>%
-      trimws %>%
-      paste(collapse = "")
+    if(searchMultiPage){
+      newUrlFunc <- urlFunc %>%
+        deparse %>%
+        trimws %>%
+        paste(collapse = "")
+    }else{
+      newUrlFunc <- sivis$pageUrl
+    }
 
     sivis$reproduceForPageChange <- paste(
       sivis$xhrHeader(urlFunc = newUrlFunc),
       sivis$xhrRequest,
       collapse = "\n"
     )
-    displayResults <- "do.call(rbind, output) %>% c %>% data.frame %>% DT::datatable()"
+    Code_4_Display <- "do.call(rbind, output) %>% c %>% data.frame %>% DT::datatable()"
 
   }else{
-    ####### go here for html
 
+    ####### go here for html
     ### initial request for single page and base code for multi page to give into getUrlJSONPageChange
 
     # config parameter should i include empty header to make it more easy to add some?
-    getTemplate <- paste0(c(paste0(c(
+    Code_2_Request <- paste0(c(
       '',
-      'response <- url %>% GET', hdr,' %>% content(type = "text")'), collapse = ""),
-      '#response %>% showHtmlPage',
-      'xpath <- data.frame(',
-      paste(c('\t"', XPathes, '"'), collapse = ""),
-      ')',
-      'response <- tryCatch(\n\texpr = response %>% read_html %>% html_nodes(xpath = as.character(xpath)) %>% html_text(), \n\terror = function(e) NULL\n)'
-    ), collapse = "\n"
-    )
+      'response <- url %>% GET', hdr,' %>% content(type = "text")'
+    ), collapse = "")
 
-    urlFunc <- dynamicUrl(
-      url = sivis$url,
-      requestCode = getTemplate
-    )$func
+    if(is.null(Code_3_Extract)){
+      Code_3_Extract <- paste0(c(
+        'xpath <- data.frame(',
+        paste(c('\t"', XPathes, '"'), collapse = ""),
+        ')',
+        'response <- tryCatch(\n\texpr = response %>% read_html %>% html_nodes(xpath = as.character(xpath)) %>% html_text(), \n\terror = function(e) NULL\n)'
+      ), collapse = "\n")
+    }
 
-    isMultiPage <- !is.null(urlFunc)
+    Request_Extract <- paste(c(Code_2_Request, Code_3_Extract), collapse = "\n")
+    if(searchMultiCols){
+      urlFunc <- dynamicUrl(
+        url = sivis$url,
+        requestCode = Request_Extract
+      )$func
+
+      # need this for updatedocument function
+      sivis$isMultiPage <- !is.null(urlFunc)
+      sivis$pageUrl <- urlFunc %>% safeDeparse()
+    }else{
+      urlFunc <- sivis$pageUrl
+    }
 
     getFinishTemplate <- ""
     indent <- ""
-    if(isMultiPage){
-      libCall <-paste0(c(
+
+    if(sivis$isMultiPage){
+
+      Code_1_LibUrl <-paste0(c(
         'library(httr)',
         'library(DT)',
-        paste0(c('urlGen <- ', urlFunc %>% safeDeparse()), collapse = ""),
+        paste0(c('urlGen <- ', sivis$pageUrl), collapse = ""),
         'nr <- 1',
         'hasResult <- TRUE',
         'output <- list()',
@@ -1991,10 +2024,13 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
         ),
         collapse = "\n"
       )
+
       # todo: very dirty
-      getTemplate %<>% gsub(pattern = "\n", replacement = "\n\t")
-      displayResults <- paste0(c(
-        '\thasResult <- length(response)',
+      #getTemplate %<>% gsub(pattern = "\n", replacement = "\n\t")
+
+      # config parameter: limit loop
+      Code_4_Display <- paste0(c(
+        '\thasResult <- length(response) & nr < 5',
         '\toutput[[nr]] <- response',
         'nr <- nr + 1',
         '}',
@@ -2003,20 +2039,19 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
       ), collapse = "\n")
 
     }else{
-      libCall <-paste0(c(
+
+      Code_1_LibUrl <-paste0(c(
         'library(httr)',
         'library(DT)',
         paste0('url <- "', pageUrl, '"')),
         collapse = "\n"
       )
-      displayResults <- 'response %>% data.frame %>% DT::datatable()'
+      Code_4_Display <- 'response %>% data.frame %>% DT::datatable()'
+
     }
 
     # todo: do i still need this reproduce? already did it here?
-    sivis$reproduceForPageChange <- paste(c(
-      getTemplate,
-      getFinishTemplate
-    ), collapse = "\n")
+    sivis$reproduceForPageChange <- Request_Extract
 
   }
 
@@ -2034,10 +2069,71 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
     return(TRUE)
   }
 
+
+  # result of the function is sivis$moreCols
+  # and addCols in global environment. So this can be placed in a seperate function
+  if(searchMultiCols){
+
+    addMultiCols(
+      XPathes = XPathes,
+      responseString = responseString,
+      extractPathes = extractPathes,
+      searchMultiCols = searchMultiCols,
+      pageUrl = pageUrl
+    )
+
+  }else{
+
+    addCols <- NULL
+
+  }
+
+  if(is.null(rCode)){
+    rCode <- paste0(c(
+      'options(stringsAsFactors = FALSE)',
+      'library(xml2)',
+      Code_1_LibUrl,
+      Code_2_Request,
+      Code_3_Extract,
+      Code_4_Display
+    ), collapse ="\n")
+  }
+
+  writeLines(
+    text = paste(c('---',
+                   'title: "R Notebook"',
+                   'output: html_notebook',
+                   '---',
+                   '',
+                   'This is a scraping suggestion for the following website: ', pageUrl,
+                   'The required content was found in the source code. Therefore, rvest was chosen over RSelenium due to performance reasons.',
+                   '',
+                   '```{r}',
+                   rCode,
+                   '```',
+
+                   '',
+                   '```{r}',
+                   paste0(c('postToProduction(host = "http://', host,'")'), collapse = ""),
+                   '```',
+                   '',
+
+                   sivis$moreCols),
+
+
+                 collapse = "\n"),
+    con = fileName
+  )
+  file.edit(fileName)
+}
+
+
+addMultiCols <- function(XPathes, responseString, extractPathes, searchMultiCols, pageUrl){
   xp1 = XPathes
   sivis$XPathes <- XPathes
   # xp2 = extractPathes$xpath$ColAltern
 
+  print("999999999999999")
   commonXPathRes <- CommonXPathData(
     responseString = responseString,
     xp1 = xp1,
@@ -2046,10 +2142,10 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
 
   addCols <- commonXPathRes$addColsOutput %>%
     do.call(what = cbind) %>%
-    .[, colSums(is.na(.)) != nrow(.), drop = FALSE] %>% # remove NA rows
+    .[, colSums(is.na(.) | !nchar(.)) != nrow(.), drop = FALSE] %>% # remove NA cols
     .[, !duplicated(., MARGIN = 2), drop = FALSE] %>%  # remove duplicate cols
-    .[complete.cases(.), , drop = FALSE] # and remove NA cols
-    #as.data.frame(col.names = colnames(.)) %>% # ensure two dimensions - not needed anymore due to drop = FALSE?
+    {.[colSums(apply(., 1, is.na)) != ncol(.), ]}  # and remove complete NA rows
+  #as.data.frame(col.names = colnames(.)) %>% # ensure two dimensions - not needed anymore due to drop = FALSE?
 
   if(length(addCols)){
     # make the order that columns which have only same values appear at last, because they might contain only title
@@ -2060,11 +2156,11 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
 
     # config parameter - remove empty character columns
     nonEmptyCol <- addCols %>%
-      apply(MARGIN = 2, FUN = function(col) col %>% gsub(pattern = "\n|\t", replacement = "") %>% nchar %>% sum %>% magrittr::is_greater_than(0))
+      apply(MARGIN = 2, FUN = function(col) col %>% gsub(pattern = "\n|\t", replacement = "") %>% nchar %>% sum(na.rm = TRUE) %>% magrittr::is_greater_than(0))
     addCols <- addCols[, nonEmptyCol, drop = FALSE]
 
     if(!exists("nr")) nr <- 999
-    save(addCols, file = paste0("addCols_", nr, ".RData")) # for batch testing
+    save(addCols, file = paste0("addCols_", nr, ".RData")) # for batch testing of notebook_scraping.rmd files
     rootXpath <- commonXPathRes$rootXPath
 
     additionColExist <- ncol(addCols)
@@ -2091,14 +2187,16 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
     # might not realise that columns cann be selected
     selectedCol <- 1:ncol(addCols)
 
-    moreCols <- addColsOption(
+    sivis$moreCols <- addColsOption(
       addCols = addCols,
       rootXpath = rootXpath,
       pageUrl = pageUrl,
-      selectedCol = 1 # initially only the column is selected, that was selected in the browser.
+      selectedCol = 0 # initially only the column is selected, that was selected in the browser.
     )
-  }else{
-    moreCols <- paste0(
+  }
+
+  if(!additionColExist & searchMultiCols){
+    sivis$moreCols <- paste0(
       c(
         "",
         "",
@@ -2106,40 +2204,8 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
       ), collapse = "\n"
     )
   }
-
-  writeLines(
-    text = paste(c('---',
-                   'title: "R Notebook"',
-                   'output: html_notebook',
-                   '---',
-                   '',
-                   'This is a scraping suggestion for the following website: ', pageUrl,
-                   'The required content was found in the source code. Therefore, rvest was chosen over RSelenium due to performance reasons.',
-                   '',
-                   '```{r}',
-                   'options(stringsAsFactors = FALSE)',
-                   'library(xml2)',
-                   libCall,
-                   sivis$reproduceForPageChange,
-
-                   displayResults,
-
-                   '```',
-
-                   '',
-                   '```{r}',
-                   paste0(c('postToProduction(host = "http://', host,'")'), collapse = ""),
-                   '```',
-                   '',
-
-                   moreCols),
-
-
-                 collapse = "\n"),
-    con = fileName
-  )
-  file.edit(fileName)
 }
+
 
 addColsOption <- function(addCols, rootXpath, pageUrl, selectedCol){
   paste0(
@@ -2200,60 +2266,63 @@ addColsOption <- function(addCols, rootXpath, pageUrl, selectedCol){
 
 updateDocument <- function(XPathes, rootXPath, pageUrl, selectedCol, doc = getActiveDocumentContext()){
 
+  pageUrl <- sivis$pageUrl
   xp <- paste(XPathes, collapse = ",\n\t")
 
   amtXP <- length(XPathes)
 
+  Code_1_LibUrl <- paste0(c(
+    'options(stringsAsFactors = FALSE)',
+    'library(rvest)',
+    'library(DT)',
+    '',
+    paste0('url <- "', pageUrl, '"')
+  ), collapse = "\n")
+
+  Code_2_Request <- 'response <- read_html(x = url)'
+
   # need this part to test for additional pages where similar data could be found.
-  sivis$reproduceForPageChange <- paste0(
+  Code_3_Extract <- paste0(
     c('xpathes <- ', paste(c(paste(c("data.frame(", glue("XPath{1:amtXP} = '{XPathes}'{c(rep(',', amtXP - 1), '')}\n\t")), collapse = "\n\t"), ")"), collapse = "\n"),
-    'nodes <- read_html(x = url) %>% html_nodes(xpath = ', rootXPath %>% safeDeparse,')',
-    'response <- lapply(xpathes, function(xpath){',
-    '\tlapply(nodes, function(node) html_nodes(x = node, xpath = xpath) %>% {ifelse(length(.), yes = html_text(.), no = NA)}) %>% unlist',
-    '})'), collapse = "\n")
+      'nodes <- response %>% read_html %>% html_nodes(xpath = ', rootXPath %>% safeDeparse,')',
+      'response <- lapply(xpathes, function(xpath){',
+      '\tlapply(nodes, function(node) html_nodes(x = node, xpath = xpath) %>% {ifelse(length(.), yes = html_text(.), no = NA)}) %>% unlist',
+      '})'), collapse = "\n")
 
-  rcode <- paste0(c('options(stringsAsFactors = FALSE)',
-                    'library(rvest)',
-                    'library(DT)',
-                    '',
-                    paste0('url <- "', pageUrl, '"'),
-                    sivis$reproduceForPageChange,
-                    'data %<>% do.call(what = cbind) %>% .[complete.cases(.), ]',
-                    'dt <- datatable(',
-                    '\tdata = data,',
-                    '\toptions = list(pageLength = 10)',
-                    ')',
-                    'dt'), collapse = "\n")
+  sivis$reproduceForPageChange <- Code_3_Extract
 
 
-  #tryCatch(eval(parse(text = rcode)),error = function(e) NULL) #, envir = .GlobalEnv
+  Code_4_Display <- paste0(c(
+    'response %<>% do.call(what = cbind) %>% .[complete.cases(.), ]',
+    'dt <- datatable(',
+    '\tdata = response,',
+    '\toptions = list(pageLength = 10)',
+    ')',
+    'dt'
+  ), collapse = "\n")
 
-  writeLines(
-    text = paste0(c('---',
-                    'title: "R Notebook"',
-                    'output: html_notebook',
-                    '---',
-                    '',
-                    paste0('This is a scraping suggestion for the following website: ', pageUrl, '.'),
-                    'The required content was found in the source code. Therefore, a get request will be performed on the target document.',
-                    '',
-                    '```{r}',
-                    rcode,
-                    '```',
-                    '',
-                    '```{r}',
-                    paste0(c('postToProduction(host = "http://', host,'")'), collapse = ""),
-                    '```',
-                    '',
-                    addColsOption(addCols, rootXPath, pageUrl, selectedCol),
-                    '```'),
-                  collapse = "\n"
-    ), con = doc$path)
-  print(doc$path)
+  rCode <- paste0(
+    c(Code_1_LibUrl,
+      Code_2_Request,
+      Code_3_Extract,
+      Code_4_Display),
+    collapse = "\n"
+  )
 
-  rstudioapi::documentSave(id = doc$id)
-  file.edit(doc$path)
-  print("done")
+  createDocument(
+    pageUrl = sivis$pageUrl,
+    reqMethod = sivis$reqMethod,
+    responseString = sivis$responseString,
+    extractPathes = sivis$extractPathes,
+    body = sivis$body,
+    XPathes = XPathes,
+    testEval = sivis$testEval,
+    useHeader = sivis$useHeader,
+    searchMultiCols = FALSE,
+    Code_3_Extract = Code_3_Extract,
+    rCode = NULL
+  )
+
 }
 
 
@@ -2315,7 +2384,7 @@ CommonXPathData <- function(responseString, xp1, extractPathes){
     xp$xpath %>% substring(first = 2)
   })
   addXP
-  leafPathes$subPathes %<>% c(., addXP) %>% unlist %>% unique
+  leafPathes$subPathes %<>% c(addXP, .) %>% unlist %>% unique
 
 
   # XPath <- leafPathes$subPathes[2]
