@@ -304,6 +304,7 @@ sivis$GETContents <- list()
 # for the testing
 
 create_sivis <- function(cbData){
+
   sivis$headers <- cbData$request$request$headers %>% {setNames(object = .$value, nm = .$name)}
 
   hdr <- sivis$headers["accept-encoding"]
@@ -328,10 +329,13 @@ create_sivis <- function(cbData){
 
   sivis$browserOutput <- cbData$clipBoardText
   targetValues <- sivis$cbData$clipBoardText$selectedText
+
   if(resourceType %in% "png"){
+
     stop(glue("Wrong resource type: {resourceType}. File an issue with: resourceType = {resourceType},
               time: {Sys.time()}, source url = {url} and an indication if this issue would be reproducible at a later time or if your
               selectedText = {sivis$browserOutput$selectedText[1]},... will likely change over time."))
+
   }
 
   cbData$request$response
@@ -446,41 +450,76 @@ create_sivis <- function(cbData){
   noHeaderContent <-  ifelse(test = is.null(noHeader), yes = "", no = noHeader  %>% content(type = "text"))
 
   # config parameter
-  withHeaderFailed <- sapply(
+  tvRatioTreshold <- 0.4
+  withHeaderRatio <- sapply(
     X = targetValues %>% gsub(pattern = "\n|\t", replacement = "") %>% trimws,
     FUN = grepl,
     fixed = TRUE,
     x = headerContent,
     USE.NAMES = FALSE
   ) %>%
-    {sum(.) / length(.)} %>%
-    magrittr::is_less_than(0.4)
+    {sum(.) / length(.)}
+
+  withHeaderSuccess <- withHeaderRatio %>%
+    magrittr::is_greater_than(tvRatioTreshold)
 
   # config parameter
   # funny exception that it works without headers only for https://www.zeit.de/index.
-  noHeaderFailed <- sapply(
+  noHeaderRatio <- sapply(
     X = targetValues,
     FUN = grepl,
     fixed = TRUE,
     x = noHeaderContent,
     USE.NAMES = FALSE
   ) %>%
-    {sum(.) / length(.)} %>%
-    magrittr::is_less_than(0.4)
+    {sum(.) / length(.)}
 
-  if(noHeaderFailed & withHeaderFailed) stop("request failed with and without headers.")
+  noHeaderSuccess <- noHeaderRatio %>%
+    magrittr::is_greater_than(tvRatioTreshold)
 
-  if(withHeaderFailed) message("cant find target values in response body for request with headers")
+  if(!noHeaderSuccess & !noHeaderSuccess){
 
-  onlyNoHeaderSuccess <- withHeaderFailed & !noHeaderFailed
+    message(glue("Status code of a request without headers is: {noHeader$status_code}."))
+    message(glue("Status code of a request with headers is: {withHeaders$status_code}."))
+
+    message(glue("Amount of target values found - for request with headers: {withHeaderRatio}. Success treshold is (higher than) {tvRatioTreshold}."))
+    message(glue("Amount of target values found - for request without headers: {noHeaderRatio}. Success treshold is (higher than) {tvRatioTreshold}."))
+
+    assign(x = "noHeader", value = noHeader %>% content, envir = .GlobalEnv)
+    assign(x = "withHeaders", value = withHeaders %>% content, envir = .GlobalEnv)
+
+    message("Response body for the request with headers is saved to a variable named 'noHeader'. It can be inspected visually (as html) with `showHtmlPage(noHeader)`.")
+    message("Response body for the request without headers is saved to a variable named 'withHeader'. It can be inspected visually (as html) with `showHtmlPage(withHeaders)`.")
+    message("Executing `showHtmlPage(withHeaders)` now. It will be available in the viewer pane.")
+
+    "showHtmlPage(withHeaders)" %>% parse(text = .) %>% eval
+    message(glue("Targetvalues are: {targetValues %>% paste(collapse = '\n ')}."))
+
+    stop("request failed with and without headers.")
+
+  }
+
+  if(!withHeaderSuccess){
+
+    message("cant find target values in response body for request with headers")
+
+  }
+
+  onlyNoHeaderSuccess <- !withHeaderSuccess & !noHeaderSuccess
+
   if(onlyNoHeaderSuccess){
+
     message("but found them attempting a request without headers,...")
     sivis$GETContents[[sivis$url]] <- noHeader
     sivis$useHeader <- FALSE
+
   }else{
+
     sivis$useHeader <- noHeaderFailed
+
   }
 
+  # for saving browser data for reproducibility
   urlShort <- gsub(
     x = sivis$url,
     pattern = "[:]|[.]|[/]|[?]|[&]|[=]|[%]|[-]",
@@ -490,6 +529,7 @@ create_sivis <- function(cbData){
 
   offline <- FALSE
   if(offline){
+
     fls <- list.files(path = "R/fromWeb/",pattern = "*.RData")
     fls
     fl <- fls[11]
@@ -517,14 +557,18 @@ create_sivis <- function(cbData){
     targetValues <- sivis$browserOutput$selectedText
     XPathFromBrowser <- sivis$browserOutput$XPath
     pageUrl <- sivis$browserOutput$pageUrl
+
   }else{
+
     XPathFromBrowser <- cbData$clipBoardText$XPath
     targetValues <- sivis$cbData$clipBoardText$selectedText
     fileName <- paste0(file.path(getwd(), "R/fromWeb", substring(text = urlShort, first = 1, last = 101)), ".RData")
     print(fileName)
     save(sivis, file = fileName)
     return(sivis)
+
   }
+
 }
 
 # Targetvalues:
@@ -827,7 +871,7 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
   # this function can get called by itself if the targetvalues have to be extracted "across multiple levels". E.g. if within
   # response is a json with an object including html.
   # If it is called a second time, the document type (html) is not known before and has to be identified.
-  #print(iterNr)
+
   iterNr = iterNr + 1
   if(iterNr > 6) stop("Too many iterations. Want to avoid getting caught in an infinite loop.")
 
@@ -880,16 +924,11 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
   docType
   if(docType == "script/json"){
 
-    str <- responseString
-    regexStr = docTypeInfo$jsonRegex
-    reqSingleQuote = docTypeInfo$reqSingleQuote
-    indexNr = docTypeInfo$JSONIdx
-
     jsonExtractor <- JSON_from_String(
-      str = str,
-      regexStr = regexStr,
-      reqSingleQuote = reqSingleQuote,
-      indexNr = indexNr,
+      str = responseString,
+      regexStr = docTypeInfo$jsonRegex,
+      reqSingleQuote = docTypeInfo$reqSingleQuote,
+      indexNr = docTypeInfo$JSONIdx,
       targetValues = targetValues
     )
 
@@ -905,149 +944,141 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
 
   }
 
+  docType
   if(docType == "application/json"){
 
-    jsonStruct <- extract_JSON(
-      responseString = responseString,
-      targetValues = targetValues,
-      extractPathes = extractPathes,
-      reqSingleQuote = reqSingleQuote
+    return(
+      evaluate_JSON(responseString, targetValues, extractPathes, reqSingleQuote, pageUrl, reqMethod, headers, useHeader, body, testRun, testEval)
     )
-    extractPathes <- jsonStruct$extractPathes
 
-    jsonStruct$allFound
-    if(jsonStruct$allFound){
-      if(testRun & !testEval){
-        return(
-          list(allFound = TRUE)
-        )
-      }
-
-      assign(x = "neighbours", value = sivis$neighbours, envir = .GlobalEnv)
-      assign(x = "extractPathes", value = extractPathes, envir = .GlobalEnv)
-
-      sivis$pageUrl = pageUrl
-      sivis$extractPathes = extractPathes
-      sivis$testEval = testEval
-      sivis$reqMethod = reqMethod
-      sivis$headers = headers
-      sivis$useHeader = useHeader
-      sivis$body = body
-      sivis$targetKeys <- extractPathes$json$targetKey %>% safeDeparse
-      targetKeys = NULL
-
-      testEval <- createDocumentGET(
-        pageUrl = pageUrl,
-        extractPathes = extractPathes,
-        testEval = testEval,
-        targetKeys = NULL, # need this for call from shiny
-        reqMethod = reqMethod,
-        headers = headers,
-        useHeader = useHeader,
-        body = body
-      )
-
-      return(
-        list(
-          testEval = testEval,
-          allFound = TRUE
-        )
-      )
-    }else{
-      responseString = jsonStruct$resultValues
-      extractPathes = jsonStruct$extractPathes
-      docType <- NULL
-      XPathFromBrowser <- XPathFromBrowser
-      iterNr <- iterNr
-      targetValues <- targetValues
-      testRun <- testRun
-      return(
-        list(
-          responseString = responseString,
-          extractPathes = extractPathes,
-          docType = docType,
-          XPathFromBrowser = XPathFromBrowser,
-          iterNr = iterNr,
-          targetValues = targetValues,
-          testRun = testRun,
-          allFound = FALSE
-        )
-      )
-    }
-    # nest in else if otherwise json with html is extracted and jumped right into html extraction
-    # without adjusting the inputs
   }else if(docType == "text/html"){
 
-    # config parameter
-    maxCheck = 5
-    htmlResult <- extract_HTML(
-      responseString = responseString,
-      targetValues = targetValues,
-      extractPathes = extractPathes,
-      XPathFromBrowser = XPathFromBrowser,
-      maxCheck = maxCheck
+    # nest in else if otherwise json with html is extracted and jumped right into html extraction without adjusting the inputs
+    return(
+      evaluate_HTML(responseString, targetValues, extractPathes, XPathFromBrowser, maxCheck)
     )
-    htmlResult
-    htmlResult$extractPathes
-    htmlResult$allFound
 
-    # have to set xpath to environ/global variable, so that later on xpathes can be added
-    XPathes <- htmlResult$extractPathes$xpath
-    extractPathes[[length(extractPathes) + 1]] <- htmlResult$extractPathes
-    names(extractPathes)[length(extractPathes)] <- "xpath"
+  }
 
-    if(all(htmlResult$allFound)){
+}
 
-      if(testRun & !testEval){
-        return(
-          list(allFound = TRUE)
-        )
-      }
+evaluate_HTML <- function(responseString, targetValues, extractPathes, XPathFromBrowser, maxCheck){
 
-      sivis$reqMethod <- reqMethod
-      sivis$responseString <- responseString
-      sivis$extractPathes <- extractPathes
-      sivis$body <- body
-      sivis$XPathes <- XPathes
-      sivis$testEval <- testEval
+  # config parameter
+  maxCheck = 5
+  htmlResult <- extract_HTML(
+    responseString = responseString,
+    targetValues = targetValues,
+    extractPathes = extractPathes,
+    XPathFromBrowser = XPathFromBrowser,
+    maxCheck = maxCheck
+  )
 
-      testEval <- createDocument(
-        pageUrl = pageUrl,
-        reqMethod = reqMethod,
-        responseString = responseString,
-        extractPathes = extractPathes,
-        body = body,
-        XPathes = XPathes,
-        testEval = testEval,
-        useHeader = useHeader
-      )
+  htmlResult
+  htmlResult$extractPathes
+  htmlResult$allFound
 
+  # have to set xpath to environ/global variable, so that later on xpathes can be added
+  XPathes <- htmlResult$extractPathes$xpath
+  extractPathes[[length(extractPathes) + 1]] <- htmlResult$extractPathes
+  names(extractPathes)[length(extractPathes)] <- "xpath"
+
+  if(all(htmlResult$allFound)){
+
+    if(testRun & !testEval){
       return(
-        list(
-          testEval = testEval
-        )
-      )
-    }else{
-      responseString = htmlResult$resultValues
-      docType = NULL
-      XPathFromBrowser = ""
-      iterNr <- iterNr
-      targetValues <- targetValues
-      testRun <- testRun
-      return(
-        list(
-          responseString = responseString,
-          extractPathes = extractPathes,
-          docType = docType,
-          XPathFromBrowser = XPathFromBrowser,
-          iterNr = iterNr,
-          targetValues = targetValues,
-          testRun = testRun,
-          allFound = FALSE
-        )
+        list(allFound = TRUE)
       )
     }
+
+    testEval <- createDocument(
+      pageUrl = pageUrl,
+      reqMethod = reqMethod,
+      responseString = responseString,
+      extractPathes = extractPathes,
+      body = body,
+      XPathes = XPathes,
+      testEval = testEval,
+      useHeader = useHeader
+    )
+
+    return(
+      list(
+        testEval = testEval
+      )
+    )
+
+  }else{
+
+    return(
+      list(
+        responseString = htmlResult$resultValues,
+        extractPathes = extractPathes,
+        docType = NULL,
+        XPathFromBrowser = "",
+        iterNr = iterNr,
+        targetValues = targetValues,
+        testRun = testRun,
+        allFound = FALSE
+      )
+    )
   }
+
+}
+
+
+evaluate_JSON <- function(responseString, targetValues, extractPathes, reqSingleQuote, pageUrl, reqMethod, headers, useHeader, body, testRun, testEval){
+
+  jsonStruct <- extract_JSON(
+    responseString = responseString,
+    targetValues = targetValues,
+    extractPathes = extractPathes,
+    reqSingleQuote = reqSingleQuote
+  )
+  extractPathes <- jsonStruct$extractPathes
+
+  jsonStruct$allFound
+
+  if(jsonStruct$allFound){
+
+    if(testRun & !testEval){
+
+      return(list(allFound = TRUE))
+
+    }
+
+    testEval <- createDocumentGET(
+      pageUrl = pageUrl,
+      extractPathes = extractPathes,
+      testEval = testEval,
+      targetKeys = NULL, # need this for call from shiny
+      reqMethod = reqMethod,
+      headers = headers,
+      useHeader = useHeader,
+      body = body
+    )
+
+    return(
+      list(testEval = testEval, allFound = TRUE)
+    )
+
+  }else{
+
+    return(
+      list(
+        responseString = jsonStruct$resultValues,
+        extractPathes = jsonStruct$extractPathes,
+        docType = NULL,
+        XPathFromBrowser = XPathFromBrowser,
+        iterNr = iterNr,
+        targetValues = targetValues,
+        testRun = testRun,
+        allFound = FALSE
+      )
+    )
+
+  }
+
 }
 
 
@@ -1402,11 +1433,15 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list(), r
 
   # config parameter
   if(foundRatio < 0.9){
+
     glue("Only found {foundRatio*100} per cent of target values, while extracting from json.") %>% warning
     allFound <- FALSE
     if(foundRatio > 0.4) allFound <- TRUE
+
   }else{
+
     allFound <- TRUE
+
   }
 
   hasNAs <- JSONValues$texts %>% is.na %>% any
@@ -1414,7 +1449,9 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list(), r
   if(hasNAs) message("Extraction of JSON values yields NAs")
 
   if(length(resultValues) > length(targetValues)){
+
     message("Found more values than expected!")
+
   }
 
   return(
@@ -1845,6 +1882,21 @@ safeDeparse <- function(expr){
 
 createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathes = extractPathes, testEval = FALSE,
                               reqMethod = "GET", headers = NULL, useHeader = FALSE, body = NULL, searchMultiPage = TRUE){
+
+
+  assign(x = "neighbours", value = sivis$neighbours, envir = .GlobalEnv)
+  assign(x = "extractPathes", value = extractPathes, envir = .GlobalEnv)
+
+  sivis$pageUrl = pageUrl
+  sivis$extractPathes = extractPathes
+  sivis$testEval = testEval
+  sivis$reqMethod = reqMethod
+  sivis$headers = headers
+  sivis$useHeader = useHeader
+  sivis$body = body
+  sivis$targetKeys <- extractPathes$json$targetKey %>% safeDeparse
+
+
   # need this later for the .rmd file, to get additional fields from the get/post request
   print("createDocumentGET")
   # fileName <- sivis[["fileName"]]
@@ -1979,6 +2031,13 @@ createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathe
 
 createDocument <- function(pageUrl, extractPathes, responseString, testEval = FALSE, reqMethod = "GET", Code_3_Extract = NULL,
                            useHeader = FALSE, body = NULL, XPathes = "", searchMultiCols = TRUE, rCode = NULL){
+
+  sivis$reqMethod <- reqMethod
+  sivis$responseString <- responseString
+  sivis$extractPathes <- extractPathes
+  sivis$body <- body
+  sivis$XPathes <- XPathes
+  sivis$testEval <- testEval
 
   print("createDocument")
   # XPathes <- sivis$XPathes
