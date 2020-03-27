@@ -7,6 +7,10 @@
 # https://careers.twitter.com/en/jobs.html
 # wrong limit and wrong addCols
 
+### consolidte jon+url vs html + url
+#json+url can have subpages too:
+#https://recruiting2.ultipro.com/MON1009MECY/JobBoard/ff7fe76d-7fb9-45e2-8b70-5b8a922358a7/?q=&o=postedDateDesc
+
 #
 # 1. Disassemble url in baseUrl and query parameters
 # 2. Identify pageChange and itemsize parameter
@@ -91,7 +95,7 @@ decodeUrl <- function(url){
   params <- cbind(key, val = ifelse(is.na(val), "", val)) %>% data.frame
   params$type <- val %>%
     {suppressWarnings(as.numeric(.))} %>%
-    {ifelse(test = is.na(.), yes = "character", no = "numeric")}
+    {ifelse(test = grepl(pattern = "[0-9]+", x = .), yes = "hasNumeric", no = "character")}
 
   list(
     url = url,
@@ -213,7 +217,7 @@ mult_divide_by <- function(key, operator = "*", factor = 2){
 
   }else{
 
-    newKey <- regexec('[0-9]', key) %>%
+    newKey <- regexec('[0-9]+', key) %>%
       regmatches(x = key) %>%
       unlist %>%
       as.numeric %>%
@@ -291,7 +295,7 @@ decode_SubPages_numeric <- function(nrows, decoded, codeAfter, before){
 #url <- sivis$url
 decodeQueryParams <- function(decoded, codeBefore, codeAfter, url){
 
-  numericParams <- decoded$params %>% dplyr::filter(type == "numeric")
+  numericParams <- decoded$params %>% dplyr::filter(type == "hasNumeric")
   response <- "" # can this be removed safely?
   amtItems <- ""
   pageChange <- ""
@@ -460,7 +464,7 @@ getPageParameter <- function(url, codeBefore, codeAfter){
 
   decoded <- suppressWarnings(decodeUrl(url))
 
-  numericParams <- decoded$params %>% dplyr::filter(type == "numeric")
+  numericParams <- decoded$params %>% dplyr::filter(type == "hasNumeric")
 
   out <- list()
   response <- "" # can this be removed safely?
@@ -837,7 +841,7 @@ decodyBody <- function(body){
 
   params$type <- val %>%
     as.numeric %>%
-    {ifelse(test = is.na(.), yes = "character", no = "numeric")}
+    {ifelse(test = grepl(pattern = "[0-9]+", x = .), yes = "hasNumeric", no = "character")}
   params
 }
 # itemSizeNr <- decodyBody(body)
