@@ -3,6 +3,9 @@
 # wenn es seiten sind und ich auf seite 2 starte, dann wäre es 2*nr.
 # könnte also prüfen ob es ein wert kleiner als 5 ist.
 
+# todo:
+# https://careers.twitter.com/en/jobs.html
+# wrong limit and wrong addCols
 
 #
 # 1. Disassemble url in baseUrl and query parameters
@@ -21,6 +24,7 @@ options(stringsAsFactors = FALSE)
 
 
 decodeUrl <- function(url){
+
   urlSplit <- url %>%
     strsplit(split = "[?]") %>%
     unlist
@@ -35,12 +39,13 @@ decodeUrl <- function(url){
     unlist %>%
     {
       data.frame(
-        val = .,
-        type = ifelse(test = is.na(suppressWarnings(as.numeric(.))), yes = "character", no = "numeric")
+        val = ., # deprecated is.na(suppressWarnings(as.numeric(.)))
+        type = ifelse(test = grepl(pattern = "[0-9]+", x = .), yes = "hasNumeric", no = "character")
       )
     }
 
   if(length(urlSplit) == 1){
+
     return(
       list(
         baseUrl = baseUrl,
@@ -48,6 +53,7 @@ decodeUrl <- function(url){
         params = list()
       )
     )
+
   }
 
   ## possible seperators for query parameter (pairs) are & ; etc.
@@ -59,7 +65,9 @@ decodeUrl <- function(url){
   # i cant go for lengths == 2 for all, because after = could be empty, so an empty val right?
   # if sep is unsuccesful it is one string which has a = in it. So testing for = alone is not enough.
   sep <- querySeper[2]
+
   for(sep in querySeper){
+
     keyValues <- urlSplit[[2]] %>%
       strsplit(split = sep)
     paramStrings <- keyValues %>%
@@ -75,9 +83,8 @@ decodeUrl <- function(url){
     allKeyVal <- keyValues %>% unlist %>% grepl(pattern = "=") %>% all
     correctSep <- correctUnpack & allKeyVal
     if(correctSep) break
+
   }
-
-
 
   key <- sapply(paramStrings, "[", 1)
   val <- sapply(paramStrings, "[", 2)
@@ -94,11 +101,12 @@ decodeUrl <- function(url){
     querySeper = sep
   )
 }
-
-
+#decodeUrl(url)
 
 encodeUrl <- function(baseUrl, params){
+
   paramUrl <- apply(params[, 1:2], 1, paste, collapse = "=") %>%
+    gsub(pattern = "&", replacement = "", fixed = TRUE) %>% # for redundant & that appear during splitting
     paste(collapse = "&")
 
   paste(c(baseUrl, paramUrl), collapse = "?")
@@ -106,7 +114,9 @@ encodeUrl <- function(baseUrl, params){
 
 #params <- decoded$params
 encodeUrlFunc <- function(baseUrl, params){
+
   paramUrl <- apply(params[, 1:2], 1, paste, collapse = "=") %>%
+    gsub(pattern = "&", replacement = "", fixed = TRUE) %>% # for redundant & that appear during splitting
     paste(collapse = "&")
 
   urlGen <- "function(nr){{paste0('{baseUrl}?{paramUrl}')}}" %>%
@@ -115,6 +125,7 @@ encodeUrlFunc <- function(baseUrl, params){
     eval
 
   return(urlGen)
+
 }
 
 
@@ -123,138 +134,316 @@ encodeUrlFunc <- function(baseUrl, params){
 # codeBefore <- sivis$reproduceForPageChange
 # codeAfter <- sivis$reproduceForPageChange
 # url <- sivis$url
-#getPageParameter_html_url(url, codeBefore = codeBefore, codeAfter = codeAfter)
+# getPageParameter_html_url(url, codeBefore = codeBefore, codeAfter = codeAfter)
 
 getPageParameter_html_url <- function(url, codeBefore, codeAfter){
+
   pageChange <- NULL
   amtItems <- NULL
 
   decoded <- suppressWarnings(decodeUrl(url))
-  hasNumericParams <- nrow(decoded$params %>% data.frame %>%  filter(type == "numeric"))
+
+  hasNumericParams <- decoded$params %>%
+    data.frame %>%
+    filter(type == "hasNumeric") %>%
+    nrow
 
   noParamData <- nrow(decoded$subPages) < 2 & !hasNumericParams
   if(noParamData) return(NULL)
 
-  if(!hasNumericParams){
-    params <- decoded$subPages
-    numericSubPages <- params %>% dplyr::filter(type == "numeric")
+  hasNumericParams
+  if(hasNumericParams){
 
-    tryCatch(eval(parse(text = codeBefore)), error = function(e) print(e))
-    before <- response
-
-    #before <- do.call(cbind, data)  # should have been replaced by response as variable name
-
-    out <- list()
-    rowNr <- 1
-    for(rowNr in seq(nrow(numericSubPages))){
-      # mutate_when fails to often
-
-      params <- decoded$subPages
-      oldVal <- params[params$val == numericSubPages[rowNr, ]$val, ]$val %>% as.numeric
-      newVal <- oldVal %>% magrittr::multiply_by(2)
-
-      params[params$val == oldVal, ]$val <- newVal
-
-      url <- params$val %>% paste(collapse = "/")
-
-      tryCatch(eval(parse(text = codeAfter)), error = function(e) print(e))
-      after <- response
-      # after <- do.call(cbind, data) # should have been replaced by response as variable name
-
-      diffResults <- !identical(after, before) & length(after)
-      lengthMatch <- dim(data.frame(after))[1] == newVal
-
-      out[[rowNr]] <- c(diffResults, lengthMatch)
-    }
-    mat <- do.call(what = rbind, args = out)
-    colnames(mat) <- c("diffContent", "lengthMatch")
-    rownames(mat) <- numericSubPages$val
-    mat
-
-    amtItems <- which(apply(mat, 1, sum) == 2) %>% names
-    pageChange <- which((mat[, 1, drop = FALSE] - mat[, 2, drop = FALSE]) == 1) %>% {rownames(mat)[.]}
-
-    return(
-      list(
-        subPages = decoded$subPages,
-        amtItems = amtItems,
-        pageChange = pageChange,
-        urlPart = "subPages"
-      )
-    )
+    decodedUrl <- decodeQueryParams(decoded, codeBefore, codeAfter, url)
 
   }else{
 
-    # filt <- decoded$params$key
-    numericParams <- decoded$params %>% dplyr::filter(type == "numeric")
-    response <- ""
-    amtItems <- ""
-    pageChange <- ""
+    decodedUrl <- decodeSubPages(decoded, codeBefore, codeAfter, url)
 
-    before <- tryCatch(eval(parse(text = codeBefore)), error = function(e) NULL)
-    # could also be just one column - should i first build the matrix and check then??
-    if(is.null(before)) stop("'before' request is empty.")
-    amtItemsBefore <- sapply(before, length) %>%
+  }
+
+  return(decodedUrl)
+}
+
+
+decodeSubPages <- function(decoded, codeBefore, codeAfter, url){
+
+  numericSubPages <- decoded$subPages %>% dplyr::filter(type == "hasNumeric")
+
+  response <- "" # can this be removed safely?
+  hasResult <- TRUE
+  tryCatch(
+    expr = eval(parse(text = codeBefore)),
+    error = function(e) print(e)
+  )
+  before <- response
+
+  #before <- do.call(cbind, data)  # should have been replaced by response as variable name
+
+  out <- list()
+  rowNr <- 1
+  nrows <- nrow(numericSubPages)
+
+  if(nrows){
+
+    decoded_SubPage <- decode_SubPages_numeric(nrows, decoded, codeAfter, before)
+
+  }else{
+
+    # look for subpages like url.com/.../Page-2
+    warning("no numeric subPage also no character-numeric mixes")
+    # candidate <- decoded$subPages$val %>% {.[grepl(x = ., pattern = "[0-9]")]}
+    # update_Num_Str(candidate, oper = "*")
+    decoded_SubPage <- NULL #decode_SubPages_char(nrows, decoded, codeAfter, before)
+
+  }
+
+  return(decoded_SubPage)
+
+}
+
+#key <- "Page-2"
+mult_divide_by <- function(key, operator = "*", factor = 2){
+
+  isNumeric <- suppressWarnings(key %>% as.numeric %>% is.na %>% magrittr::not())
+
+  if(isNumeric){
+
+    newKey <- get(operator)(key, factor)
+
+  }else{
+
+    newKey <- regexec('[0-9]', key) %>%
+      regmatches(x = key) %>%
+      unlist %>%
+      as.numeric %>%
+      {gsub(pattern = ., replacement = get(operator)(., factor), x = key)}
+
+  }
+
+  newKey
+
+}
+
+
+# # procedure of numeric subpages
+# 1. Loop through numeric Sub Pages and modify in object all subpages.
+# 2. get old value and create new value
+# 3. compare before and after
+#
+# For some cases the pageChange/itemSize is within a character, e.g. url.com/.../Page-2.
+# Procedure would be the same except for the modification of the value. So that could be
+# implemented in a more generic way.
+
+
+decode_SubPages_numeric <- function(nrows, decoded, codeAfter, before){
+
+  rowNr <- 1
+  out <- list()
+  subPages <- decoded$subPages
+  numericSubPages <- subPages %>% dplyr::filter(type == "hasNumeric")
+  for(rowNr in seq(nrows)){
+
+    # mutate_when fails to often
+    oldVal <- subPages[subPages$val == numericSubPages[rowNr, ]$val, ]$val
+    newVal <- oldVal %>% mult_divide_by(factor = 2)
+
+    subPages[subPages$val == oldVal, ]$val <- newVal
+
+    url <- subPages$val %>% paste(collapse = "/")
+
+    response <- "" # can this be removed safely?
+    hasResult <- TRUE
+    tryCatch(
+      expr = eval(parse(text = codeAfter)),
+      error = function(e) print(e)
+    )
+    # after <- do.call(cbind, data) # should have been replaced by response as variable name
+    after <- response
+
+
+    diffResults <- !identical(after, before) & length(after)
+    lengthMatch <- dim(data.frame(after))[1] == newVal
+
+    out[[rowNr]] <- c(diffResults, lengthMatch)
+  }
+
+  mat <- do.call(what = rbind, args = out)
+  colnames(mat) <- c("diffContent", "lengthMatch")
+  rownames(mat) <- numericSubPages$val
+  mat
+
+  amtItems <- which(apply(mat, 1, sum) == 2) %>% names
+  pageChange <- which((mat[, 1, drop = FALSE] - mat[, 2, drop = FALSE]) == 1) %>% {rownames(mat)[.]}
+
+  return(
+    list(
+      subPages = decoded$subPages,
+      amtItems = amtItems,
+      pageChange = pageChange,
+      urlPart = "subPages"
+    )
+  )
+
+}
+
+
+#url <- sivis$url
+decodeQueryParams <- function(decoded, codeBefore, codeAfter, url){
+
+  numericParams <- decoded$params %>% dplyr::filter(type == "numeric")
+  response <- "" # can this be removed safely?
+  amtItems <- ""
+  pageChange <- ""
+
+  tryCatch(eval(parse(text = codeBefore)), error = function(e) NULL)
+  before <- response %>% unlist
+  # could also be just one column - should i first build the matrix and check then??
+
+  if(is.null(before)){
+
+    cat(codeBefore)
+    stop("'before' request is empty. Request might have failed. Check it above:")
+
+  }
+
+  amtItemsBefore <- sapply(before, length) %>%
+    table %>%
+    .[1] %>%
+    names %>%
+    as.numeric()
+
+  if(typeof(before) == "character") amtItemsBefore <- length(before)
+  amtItemsBefore
+
+  rowNr <- 1
+  for(rowNr in 1:nrow(numericParams)){
+    params <- decoded$params
+
+    initVal <- numericParams[rowNr, ]$val %>% as.numeric()
+
+    newVal <- initVal*2
+    currentKey  <- numericParams[rowNr, ]$key
+
+    #mutate_when always fails
+    params[params$key == currentKey, ]$val <- newVal
+    url <- encodeUrl(decoded$baseUrl, params)
+    print(url)
+
+    # will i need this as a seperate function?
+    # compareRequests <- function(before, url, codeAfter){
+    output <- NULL
+    response <- "" # can this be removed safely?
+    nr <- 1
+    tryCatch(eval(parse(text = codeAfter)), error = function(e) NULL)
+    after <- response %>% unlist
+    if(is.null(after)) warning(glue("second request for analying numeric params is empty, see: {url}."))
+
+    amtItemsAfter <- sapply(after, length) %>%
       table %>%
       .[1] %>%
       names %>%
       as.numeric()
-    if(typeof(after) == "character") amtItemsBefore <- length(before)
-    amtItemsBefore
+    # if its unpacked already in an array. Need a better generic handler here.
+    if(typeof(after) == "character") amtItemsAfter <- length(after)
+    amtItemsAfter
 
+    amtItemMatch <- amtItemsAfter == newVal
 
-    rowNr <- 2
-    for(rowNr in 1:nrow(numericParams)){
-      params <- decoded$params
+    if(amtItemMatch){
 
-      initVal <- numericParams[rowNr, ]$val %>% as.numeric()
-      newVal <- initVal*2
-      currentKey  <- numericParams[rowNr, ]$key
+      amtItems = decoded$params %>% dplyr::filter(key == currentKey)
 
-      #mutate_when always fails
-      params[params$key == currentKey, ]$val <- newVal
+    }else{
 
-      print(url)
-      url <- encodeUrl(decoded$baseUrl, params)
-      print(url)
-      after <- tryCatch(eval(parse(text = codeAfter)), error = function(e) NULL)
+      # todo: redundant code: does another function make sense?
+      itemSizeCandidate <- amtItemsBefore == initVal
+      itemSizeCandidate
+      # above it was tried to find the new value by multiplying by 2. But this does not work if
+      # the itemSize parameter was already "maxed out". Therefore, if amount of results is equal
+      # to the parameter value, it could still be itemSize parameter and that should be checked
+      # by dividing by two.
+      if(itemSizeCandidate){
+        newVal <- initVal/2
+        params[params$key == currentKey, ]$val <- newVal
 
-      amtItemsAfter <- sapply(after, length) %>%
-        table %>%
-        .[1] %>%
-        names %>%
-        as.numeric()
-      # if its unpacked already in an array. Need a better generic handler here.
-      if(typeof(after) == "character") amtItemsAfter <- length(after)
-      amtItemsAfter
+        print(url)
+        url <- encodeUrl(decoded$baseUrl, params)
+        print(url)
+        after <- tryCatch(eval(parse(text = codeAfter)), error = function(e) NULL)
 
-      amtItemMatch <- amtItemsAfter == newVal
-      if(amtItemMatch){
-        amtItems = decoded$params %>% dplyr::filter(key == currentKey)
-      }
-      # print(amtItemsBefore)
-      # print(amtItemsAfter)
-      # print(identical(before, after))
+        amtItemsAfter <- sapply(after, length) %>%
+          table %>%
+          .[1] %>%
+          names %>%
+          as.numeric()
+        # if its unpacked already in an array. Need a better generic handler here.
+        if(typeof(after) == "character") amtItemsAfter <- length(after)
 
-      resultsChanged <- !identical(before, after)
-      if(resultsChanged & !amtItemMatch){  # amtItemsBefore == amtItemsAfter &
-        pageChange = decoded$params %>% dplyr::filter(key == currentKey)
+        amtItemMatch <- amtItemsAfter == newVal
+        if(amtItemMatch){
+          amtItems = decoded$params %>% dplyr::filter(key == currentKey)
+        }
       }
     }
+    # print(amtItemsBefore)
+    # print(amtItemsAfter)
+    # print(identical(before, after))
 
-    fixParams <- decoded$params %>% dplyr::filter(not(key %in% c(pageChange, amtItems)))
+    resultsChanged <- !identical(before, after)
+    if(resultsChanged & !amtItemMatch){  # amtItemsBefore == amtItemsAfter &
 
-    return(
-      list(
-        pageChange = pageChange,
-        amtItems = amtItems,
-        baseUrl = decoded$baseUrl,
-        fixParams = fixParams,
-        urlPart = "queryParams"
-      )
-    )
+      pageChange = decoded$params %>% dplyr::filter(key == currentKey)
+      pageChange$startAt <- pageChange$val
+
+    }
+
   }
+
+  # next test for page 0.
+  if(sum(nchar(pageChange))){
+
+    params[params$key == currentKey, ]$val <- 0
+    url <- encodeUrl(decoded$baseUrl, params)
+
+    # url+json does not have direct return output. Need to go for variable: "output"
+    tryCatch(eval(parse(text = codeAfter)), error = function(e) NULL)
+    x0  <- output %>% unlist
+
+    params[params$key == currentKey, ]$val <- 1
+    url <- encodeUrl(decoded$baseUrl, params)
+    tryCatch(eval(parse(text = codeAfter)), error = function(e) NULL)
+    x1 <- output %>% unlist
+
+    if(initVal > 5){
+
+      startAt <- ifelse(test = length(x0) & !identical(x0, before), yes = 0, no = initVal)
+
+    }else{ #initVal <= 5
+
+      startAt <- ifelse(test = length(x1), yes = 1, no = initVal)
+      startAt <- ifelse(test = identical(x1, x0), yes = initVal, no = 0)
+
+    }
+
+    pageChange$startAt <- startAt
+
+  }
+
+  fixParams <- decoded$params %>% dplyr::filter(not(key %in% c(pageChange, amtItems)))
+
+  return(
+    list(
+      pageChange = pageChange,
+      amtItems = amtItems,
+      baseUrl = decoded$baseUrl,
+      fixParams = fixParams,
+      urlPart = "queryParams"
+    )
+  )
 }
+
+
 
 # codeBefore <- sivis$reproduceForPageChange
 # codeAfter <- sivis$reproduceForPageChange
@@ -265,47 +454,55 @@ getPageParameter_html_url <- function(url, codeBefore, codeAfter){
 
 # url <- sivis$url
 getPageParameter <- function(url, codeBefore, codeAfter){
+
   pageChange <- NULL
   amtItems <- NULL
 
   decoded <- suppressWarnings(decodeUrl(url))
 
-  params <- decoded$params %>% dplyr::filter(type == "numeric")
+  numericParams <- decoded$params %>% dplyr::filter(type == "numeric")
 
   out <- list()
-  response <- ""
+  response <- "" # can this be removed safely?
   tryCatch(eval(parse(text = codeBefore)), error = function(e) print(e))
   before <- unlist(output)
+  before
+  paramNr <- 1
 
-  paramNr <- 3
-  for(paramNr in 1:length(params$key)){
-    filt <- params$key[paramNr]
-    initVal <- params$val[paramNr]
+  for(paramNr in 1:length(numericParams$key)){
+    print(paramNr)
+    filt <- numericParams$key[paramNr]
+    initVal <- numericParams$val[paramNr] %>% as.numeric
 
     newValStr <- glue("', {initVal}*nr,'")
-    newVal <- as.numeric(initVal)*2
+    newVal <- initVal*2
     #mutate_when always fails
     parms <- decoded$params
     parms[parms$key == filt, ]$val <- newValStr
 
     print(url)
-    nr <- 2
-    response <- ""
+
+
     output <- list()
+    response <- "" # can this be removed safely?
+    hasResult <- TRUE
+    nr <- 2
     scraper$urlGen <- encodeUrlFunc(baseUrl = decoded$baseUrl, params = parms)
     url <- scraper$urlGen(nr)
     print(url)
     tryCatch(eval(parse(text = codeAfter)), error = function(e) print(e))
     after <- unlist(output)
 
-    differentResults <- !identical(after, before)
+    differentResults <- !identical(after, before) & !is.null(after)
     lengthMatch <- dim(data.frame(after))[1] == newVal
 
     out[[paramNr]] <- c(differentResults, lengthMatch)
+
   }
+
   mat <- do.call(what = rbind, args = out)
   colnames(mat) <- c("diffContent", "lengthMatch")
-  rownames(mat) <- params$key
+  rownames(mat) <- numericParams$key
   mat
 
   itemsPerPage <- which(apply(mat, 1, sum) == 2) %>% names
@@ -318,7 +515,7 @@ getPageParameter <- function(url, codeBefore, codeAfter){
       dplyr::filter(key == itemsPerPage) %>%
       dplyr::select(val)
 
-    itemSizes <- c(25, 50, 100, 200, 500, 1000)
+    itemSizes <- c(0, 25, 50, 100, 200, 500, 1000)
     multiples <- itemSizes / as.numeric(initVal)
 
     itemSizeNr <- 1
@@ -339,14 +536,17 @@ getPageParameter <- function(url, codeBefore, codeAfter){
       url <- scraper$urlGen(nr)
       print(url)
       output <- list()
-      response <- ""
+      response <- "" # can this be removed safely?
+      hasResult <- TRUE
       tryCatch(eval(parse(text = codeAfter)), error = function(e) print(e))
       after <- unlist(output)
       lengthMatch <- dim(data.frame(after))[1] == newVal
       print(dim(data.frame(after))[1])
       print(lengthMatch)
       success[itemSizeNr] <- lengthMatch
+
     }
+
     itemSizeSuccess <- success %>% setNames(itemSizes)
     itemSize <- itemSizeSuccess %>%
       which %>%
@@ -354,20 +554,27 @@ getPageParameter <- function(url, codeBefore, codeAfter){
       names
   }
 
+  # todo: put both if with the one above
+  if(length(itemsPerPage)){
+
+    parms[parms$key == itemsPerPage, ]$val <- itemSize
+
+  }
+
   # need fresh decoded$params otherwise they overwrite each other.
   # could refactor.
   if(length(pageChange)){
-    parms <- decoded$params
-    initVal <- parms[parms$key == pageChange, ]$val
-    parms[parms$key == pageChange, ]$val <- glue("', {initVal}*nr,'")
+
+    scraper <- testPage0(
+      numericParams = numericParams,
+      decoded = decoded,
+      pageChange = pageChange,
+      scraper = scraper,
+      codeAfter = codeAfter,
+      before = before
+    )
+
   }
-
-  if(length(itemsPerPage)){
-    parms[parms$key == itemsPerPage, ]$val <- itemSize
-  }
-
-
-  scraper$urlGen <- encodeUrlFunc(baseUrl = decoded$baseUrl, params = parms)
 
   return(
     list(
@@ -378,7 +585,36 @@ getPageParameter <- function(url, codeBefore, codeAfter){
       urlGen = scraper$urlGen
     )
   )
+
 }
+
+testPage0 <- function(numericParams, decoded, pageChange, scraper, codeAfter, before){
+
+  parms <- decoded$params
+  initVal <- parms[parms$key == pageChange, ]$val
+  parms[parms$key == pageChange, ]$val <- glue("', {initVal}*nr,'")
+
+  stepSize <- numericParams[numericParams$key == pageChange, ]$val
+  parms[parms$key == pageChange, ]$val <- glue("', {stepSize}*(nr - 1),'")
+  saveUrl <- scraper$urlGen
+  scraper$urlGen <- encodeUrlFunc(
+    baseUrl = decoded$baseUrl,
+    params = parms
+  )
+
+  # have to set hasResult + output otherwise the while loop
+  # in codeAfter will not start
+  hasResult <- TRUE
+  response <- "" # can this be removed safely?
+  output <- list()
+  tryCatch(eval(parse(text = codeAfter)), error = function(e) print(e))
+  x0 <- unlist(output)
+  hasZeroRes <- length(x0) & !identical(before, x0)
+  if(!hasZeroRes) scraper$urlGen <- saveUrl
+
+  return(scraper)
+}
+
 
 # url <- "https://careers.key.com/en-US/search?pagenumber=2"
 # load("dynamicUrl/dynamicUrl_chipotle.RData")
@@ -388,15 +624,27 @@ getPageParameter <- function(url, codeBefore, codeAfter){
 # done <- getPageParameter(url = url, codeBefore = codeBefore, codeAfter = codeAfter)
 # save(sivis, file = "dynamicUrl/dynamicUrl_dow.RData")
 
+
+
+
+######## SPEC:
+# 2      --->  '", {initVal}*nr,"'
+# Page-2 --->  '", {initVal}*nr,"'
+
+# best way to do it is by replacing the numbers with {nr} and use glue().
+# replace two digit numbers with [0-9]+, to avoid {nr}{nr} as a replacement
+
 urlGenWithSubPages <- function(splitForPage){
+
   subPages <- splitForPage$subPages
 
   initVal <- splitForPage$pageChange
-  subPages[subPages$val == splitForPage$pageChange, ]$val <- glue('", {initVal}*nr,"')
+  newVal <- initVal %>% gsub(pattern = "[0-9]+", replacement = "{nr}")
+  subPages[subPages$val == splitForPage$pageChange, ]$val <- newVal
   url <- subPages$val %>% paste(collapse = "/")
 
   str <- glue(
-    "function(nr){{paste0(\"{url}\")}}"
+    "function(nr){{glue(\"{url}\")}}"
   )
   str
   urlGen <- eval(parse(text = str))
@@ -406,39 +654,68 @@ urlGenWithSubPages <- function(splitForPage){
       urlGen = urlGen
     )
   )
+
 }
 
-urlGenCode <- function(splitForPage){
+urlGenCode <- function(splitForPage, requestCode){
+
   if(!nchar(splitForPage$pageChange) & !nchar(splitForPage$amtItems)) return(NULL)
 
   fixP <- splitForPage$fixParams
 
   fixParamUrl <- apply(fixP[, 1:2], 1, paste0, collapse = "=") %>%
+    gsub(pattern = "&", replacement = "", fixed = TRUE) %>% # for redundant & that appear during splitting
     paste(collapse = "&")
 
-  pageChangeVal <- splitForPage$pageChange$val %>% as.numeric %>% magrittr::divide_by(2) %>% floor
+  pageChangeVal <- splitForPage$pageChange$val %>% as.numeric
+  # could also start at zero: E.g. url?...&startrow=25, also works for url?...&startrow=0.
+  multiplier <- ifelse(
+    test = pageChangeVal > 1 &  splitForPage$pageChange$startAt == 0,
+    yes = "(nr - 1)",
+    no = "nr"
+  )
+
+  # if stepsize is 1, but start at 0. Did this ever occur?
+  multiplier <- ifelse(
+    test = pageChangeVal == 1 &  splitForPage$pageChange$startAt == 0,
+    yes = "nr - 1",
+    no = multiplier
+  )
+
+  # user should start on page2, could start on 3. But pagechange could also be of type: url?...&startrow=25.
+  # dirty baseline rule, smaller 5 set to 1, else keep e.g. 25
+  pageChangeVal <- ifelse(test = pageChangeVal < 5, yes = 1, no = pageChangeVal)
+  pageChangeVal <- ifelse(test = pageChangeVal == 1, yes = "", no = glue("*{pageChangeVal}"))
+
+  print(splitForPage$pageChange$key)
+  splitForPage$pageChange$key %<>% gsub(pattern = "&", replacement = "", fixed = TRUE)
+  print(splitForPage$pageChange$key)
+
   urlGen <- paste0(
-    "function(nr){paste0(\"", splitForPage$baseUrl, "?", fixParamUrl, "&", splitForPage$pageChange$key, "=\", nr*", pageChangeVal,")}"
+    "function(nr){paste0(\"", splitForPage$baseUrl, "?", fixParamUrl, "&", splitForPage$pageChange$key, "=\", ", multiplier, pageChangeVal,")}"
   ) %>%
     parse(text = .) %>%
     eval
 
-  hasItemSize <- nchar(splitForPage$amtItems)
+  hasItemSize <- nchar(splitForPage$amtItems) %>% sum
+
   if(hasItemSize){
+
     amtItemsVal <- splitForPage$amtItems$val %>% as.numeric
 
     amtItemsStr <- splitForPage$amtItems[1:2] %>%
       paste(collapse = "=") %>%
       paste0("&", .)
 
-    str <- glue('function(nr){{paste0("{splitForPage$baseUrl}?{fixParamUrl}&{splitForPage$pageChange$key}=", nr*{initVal}, "{amtItemsStr}")}}')
+    str <- glue('function(nr){{paste0("{splitForPage$baseUrl}?{fixParamUrl}&{splitForPage$pageChange$key}=", nr{pageChangeVal}, "{amtItemsStr}")}}')
 
     # search highest amtItem parameter
-    itemSizes <- c(25, 50, 100, 200, 500, 1000)
+    itemSizes <- c(0, 25, 50, 100, 200, 500, 1000)
     multiples <- itemSizes / as.numeric(amtItemsVal)
 
     itemSizeNr <- 1
     success <- logical(length(itemSizes))
+
     for(itemSizeNr in 1:length(itemSizes)){
 
       newVal <- as.numeric(amtItemsVal)*multiples[itemSizeNr]
@@ -451,25 +728,29 @@ urlGenCode <- function(splitForPage){
       url <- func(nr)
       print(url)
       output <- list()
-      response <- ""
-      tryCatch(eval(parse(text = codeAfter)), error = function(e) print(e))
+      response <- "" # can this be removed safely?
+      hasResult <- TRUE
+      tryCatch(eval(parse(text = requestCode)), error = function(e) print(e))
       after <- unlist(response)
 
       lengthMatch <- dim(data.frame(after))[1] >= itemSizes[max(1, itemSizeNr - 1)] # could be replaced by check if result is as good as last one, see open issue in docu
       print(dim(data.frame(after))[1])
       print(lengthMatch)
       success[itemSizeNr] <- lengthMatch
+
     }
+
     itemSizeSuccess <- success %>% setNames(itemSizes)
     itemSize <- itemSizeSuccess %>%
       which %>%
       tail(1) %>%
       names
 
-    amtItemsStr <- glue("&ps={itemSize}")
-    urlGen <- glue('function(nr){{paste0("{splitForPage$baseUrl}?{fixParamUrl}&{splitForPage$pageChange$key}=", nr*{initVal}, "{amtItemsStr}")}}') %>%
+    amtItemsStr <- glue("&{splitForPage$amtItems$key}={itemSize}")
+    urlGen <- glue('function(nr){{paste0("{splitForPage$baseUrl}?{fixParamUrl}&{splitForPage$pageChange$key}=", nr{pageChangeVal}, "{amtItemsStr}")}}') %>%
       parse(text = .) %>%
       eval
+
   }
 
   return(
@@ -477,13 +758,16 @@ urlGenCode <- function(splitForPage){
       urlGen = urlGen
     )
   )
+
 }
 
 
 ###### HTML+URL html url url+html
 
+# url <- sivis$url
 # requestCode <- sivis$reproduceForPageChange
 dynamicUrl <- function(url, requestCode){
+
   # 1. Disassemble url in baseUrl and query parameters
   # 2. Identify pageChange and itemsize parameter
   splitForPage <- suppressWarnings(
@@ -493,11 +777,13 @@ dynamicUrl <- function(url, requestCode){
       codeAfter = requestCode
     )
   )
+  splitForPage
   if(is.null(splitForPage)) return(NULL)
 
   if(splitForPage$urlPart == "subPages"){
 
     urlGen <- urlGenWithSubPages(splitForPage)$urlGen
+
     return(
       list(
         func = urlGen
@@ -507,7 +793,7 @@ dynamicUrl <- function(url, requestCode){
   }else{ #splitForPage$urlPart == "queryParams"
 
     # 3. Build new url as a function with fixed itemsize and variable pagechange
-    func <- urlGenCode(splitForPage)$urlGen
+    func <- urlGenCode(splitForPage, requestCode)$urlGen
     initVal <- splitForPage$pageChange$val %>% as.numeric %>% magrittr::divide_by(2)
 
     return(
@@ -516,7 +802,9 @@ dynamicUrl <- function(url, requestCode){
         initVal = initVal
       )
     )
+
   }
+
 }
 
 # url <- sivis$cbData$request$request$url
@@ -591,7 +879,7 @@ encodeBody <- function(baseUrl, params){
 # requestCode = sivis$xhrRequest
 
 getUrlJSONPageChange <- function(url, headerCode, requestCode){
-  url <- sivis$url
+
   decoded <- decodeUrl(url = url)
   codeBefore <- paste(headerCode, requestCode, collapse = "\n")
   codeAfter <- requestCode

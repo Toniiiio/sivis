@@ -50,10 +50,14 @@
 ####access denied
 
 
+###### 422 Unprocessable entities
+# https://jobs.marriott.com/marriott/jobs?page=1&limit=100
+# https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422
+
 
 ####loads popup text only or wrong request? --> wrong request
 #https://www.governmentjobs.com/careers/cincinnati?page=2
-
+#https://careers.equityapartments.com/ListJobs/All/Page-2
 
 
 ##### false candidates need classes or check children. but cant
@@ -67,6 +71,8 @@
 ## custom seperator
 #https://evergy.taleo.net/careersection/evergy_external_career_section/jobsearch.ftl?lang=en&portal=8360483464
 
+# xpath fails on second try
+# https://careers-aflac.icims.com/jobs/search?pr=1&searchRelation=keyword_all&schemaId=&o=
 
 # Anforderungen, Beispiele für Funktionen sammeln.
 # substr321 entsprechend umbenennen umschreiben
@@ -112,8 +118,9 @@
 # todo: Missing clipboardtext: https://connekthq.com/plugins/ajax-load-more/examples/default/
 #todo: FÃ¼r Unterschied von   url = cbData$request$request$url und url <- cbData$clipBoardText$pageUrl bei abendblatt.de. Ersterer ist irgendein JS von anderer Seite.
 
-# falscher request:
-##https://www.dm.de/blend-a-med-zahnpasta-classic-p8001090272232.html
+
+
+
 
 
 print <- function(x, max = 500){
@@ -151,6 +158,8 @@ print <- function(x, max = 500){
 #https://pfizer.wd1.myworkdayjobs.com/PfizerCareers
 
 # WRONG REQUEST in
+# falscher request:
+##https://www.dm.de/blend-a-med-zahnpasta-classic-p8001090272232.html
 # https://mastercard.jobs/jobs/#3
 # and https://www.att.jobs/search-jobs
 
@@ -158,6 +167,10 @@ print <- function(x, max = 500){
 
 # selects wrong column element in sivis - header value in column header
 #https://tractorsupply.jobs/jobs/search#/results?keyword&jobcategory=&jobstate=&jobcity=&zipcode&zipradius=20&positiontype=Both&field24417=
+
+
+### two seperate requests - two requests - html+get
+# https://careers.ihsmarkit.com/search.php
 
 
 ### to learn:
@@ -374,6 +387,7 @@ create_sivis <- function(cbData){
     sivis$verboseLog <- verboseLogName %>% readLines %>% paste(collapse = "\n")
     unlink(verboseLogName)
 
+    # config parameter - timeout = 6
     noHeader <- tryCatch(expr = POST(
       url = sivis$url,
       body = sivis$headerBody,
@@ -572,7 +586,7 @@ if(FALSE){
 createScraper <- function(){
   nr <<- 19
 
-  host <<- "192.168.1.4"
+  host <<- "192.168.1.11"
   #host <- "77.182.65.66"
   # host <<- "10.22.20.120"
 
@@ -602,7 +616,8 @@ createScraper <- function(){
 # grep(pattern = "&#8211;", x = extract_meta$responseString2)
 # grep(pattern = "-", x = extract_meta$responseString2)
 
-use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE, allow){
+
+prepare_Extract <- function(sivis){
 
   print("sivis$browserOutput$pageUrl")
   print(sivis$browserOutput$pageUrl)
@@ -669,6 +684,7 @@ use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE, allow){
   # responseToText <- gsub(responseToText, pattern = "\/", replacement = "/", fixed = TRUE)
 
   if(!nchar(targetValues)) stop("targetValues are empty")
+
   newTargetValues <- sapply(targetValues, FUN = function(targetValue){
     aregexec(
       pattern = targetValue,
@@ -688,10 +704,13 @@ use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE, allow){
   NotMatchBefore <- targetValues[!regNotFound & !encodErrors]
   NotMatchAfter <- newTargetValues[!regNotFound & !encodErrors] %>% unlist
   fuzzyMatches <- which(unlist(NotMatchAfter) != NotMatchBefore)
+
   if(length(fuzzyMatches)){
+
     fuzzyBefore <- NotMatchBefore[fuzzyMatches] %>% paste(collapse = '\", \"') %>% c('"', ., '"') %>% paste(collapse = "")
     fuzzyAfter <- NotMatchAfter[fuzzyMatches] %>% paste(collapse = '\", \"') %>% c('"', ., '"') %>% paste(collapse = "")
     warning(glue("Targetvalues:\n {fuzzyBefore} \nchanged to\n {fuzzyAfter}, \nbecause they where not found with a direct match. But only with a fuzzy match using a fuzzy parameter of {paramFuzzy}. \nConsider configuring that parameter if that change was inaccurate."))
+
   }
 
   newTargetValues  %<>% unlist
@@ -702,13 +721,18 @@ use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE, allow){
   # content type can be NULL? see https://www.accenture.com/de-de/careers/jobsearch?jk=&sb=1
 
   # could also extract encoding here?? utf-8?
-  if(!is.null(contentType)){
+  hasContentType <- !is.null(contentType)
+  if(hasContentType){
+
     docType <- contentType %>%
       strsplit(split = ";") %>%
       unlist %>%
       .[1]
+
   }else{
+
     docType <- NULL
+
   }
 
   # check if json is within string.
@@ -716,44 +740,76 @@ use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE, allow){
   if(is.null(resourceType)) resourceType  <- ""
   if(resourceType == "script" & docType == "application/json") docType <- "script/json"
 
-  extract_meta %>% names
   extract_meta$docType <- docType
   extract_meta$extractPathes = list()
   extract_meta$iterNr <- 0
+
+  return(
+    list(
+      extract_meta = extract_meta,
+      cbdata = cbdata,
+      reqMethod = reqMethod,
+      body = body,
+      XPathFromBrowser = XPathFromBrowser,
+      pageUrl = pageUrl,
+      targetValues = targetValues,
+      headers = headers,
+      useHeader = useHeader
+    )
+  )
+}
+
+
+
+
+use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE, allow){
+
+  const_meta <- prepare_Extract(sivis)
+
+
+  extract_meta <- const_meta$extract_meta
   continue <- TRUE
 
   while(continue){
+
     responseString = extract_meta$responseString
     docType = extract_meta$docType
-    docType
     extractPathes = extract_meta$extractPathes
     iterNr = extract_meta$iterNr
 
     extract_meta <- extracts_data(
       responseString = responseString,
       docType = docType,
-      cbdata = cbdata,
-      reqMethod = reqMethod,
-      body = body,
-      XPathFromBrowser = XPathFromBrowser,
       extractPathes = extractPathes,
-      pageUrl = pageUrl,
-      targetValues = targetValues,
-      testRun = testRun,
-      testEval = testEval,
       iterNr = iterNr,
-      headers = headers,
-      useHeader = useHeader
+
+      cbdata = const_meta$cbdata,
+      reqMethod = const_meta$reqMethod,
+      body = const_meta$body,
+      XPathFromBrowser = const_meta$XPathFromBrowser,
+      pageUrl = const_meta$pageUrl,
+      targetValues = const_meta$targetValues,
+      headers = const_meta$headers,
+      useHeader = const_meta$useHeader,
+
+      testRun = testRun,
+      testEval = testEval
     )
 
     evalTestSuccess <- extract_meta[["testEval"]]
+
     if(!is.null(evalTestSuccess)){
+
       if(evalTestSuccess) return(TRUE)
+
     }
+
     continue <- !extract_meta[["allFound"]]
     continue
   }
+
   return(TRUE)
+
 }
 
 
@@ -776,12 +832,15 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
   if(iterNr > 6) stop("Too many iterations. Want to avoid getting caught in an infinite loop.")
 
   getAddTextJSONInfo <- identical(docType, "script/json")
+
   if(is.null(docType) | getAddTextJSONInfo){
+
     docTypeInfo <- findDocType(
       responseString = responseString,
       targetValues = targetValues
     )
     docType <- docTypeInfo$type
+
   }
 
 
@@ -789,28 +848,38 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
   if(docType == "application/xhtml+xml") docType <- "text/html"
 
   if(responseString %>% jsonlite::validate()){
+
     # text/plain -> is jsonobject for https://akamaijobs.referrals.selectminds.com/jobs/search/5145592/page2
     # decided for generic json check
     docType <- "application/json"
+
   }
 
   if(docType != "application/json" & grepl(pattern = "application", x = docType) & grepl(pattern = "json", x = docType)){
+
     warning(glue("DocType: {docType} seems to be of type 'application/json'. Attempting the corresponding extraction method.
                   Please file an issue to add this document type to the list with an indication whether the scrape was successful."))
     docType <- "application/json"
+
   }
+
   if(docType != "text/html" & grepl(pattern = "html", x = docType)){
+
     warning(glue("DocType: {docType} seems to be of type 'text/html'. Attempting the corresponding extraction method.
                   Please file an issue to add this document type to the list with an indication whether the scrape was successful."))
     docType <- "text/html"
+
   }
 
   if(magrittr::not(docType %in% c("text/html", "application/json", "script/json"))){
+
     stop(glue("For docType: '{docType}' there is no extraction method available yet. Please file an issue."))
+
   }
 
   docType
   if(docType == "script/json"){
+
     str <- responseString
     regexStr = docTypeInfo$jsonRegex
     reqSingleQuote = docTypeInfo$reqSingleQuote
@@ -823,6 +892,7 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
       indexNr = indexNr,
       targetValues = targetValues
     )
+
     if(!jsonlite::validate(jsonExtractor$jsons$jsons)) stop("Identified a json, but can not parse it with jsonlite.")
 
     responseString <- jsonExtractor$jsons$jsons
@@ -832,9 +902,11 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
     # have extracted a JSON now, can move on as if i would have gotten a JSON from the server.
     # The necessary extraction step is saved in variable above: extractPathes.
     docType <- "application/json"
+
   }
 
   if(docType == "application/json"){
+
     jsonStruct <- extract_JSON(
       responseString = responseString,
       targetValues = targetValues,
@@ -862,14 +934,7 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
       sivis$useHeader = useHeader
       sivis$body = body
       sivis$targetKeys <- extractPathes$json$targetKey %>% safeDeparse
-
-      # pageUrl <- sivis$pageUrl
-      # extractPathes <- sivis$extractPathes
-      # testEval <- sivis$testEval
-      # reqMethod <- sivis$reqMethod
-      # headers <- sivis$headers
-      # useHeader <- sivis$useHeader
-      # body <- sivis$body
+      targetKeys = NULL
 
       testEval <- createDocumentGET(
         pageUrl = pageUrl,
@@ -987,6 +1052,7 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
 
 
 createDocumentGETWrap <- function(targetKeys){
+
   pageUrl <- sivis$pageUrl
   extractPathes <- sivis$extractPathes
   testEval <- sivis$testEval
@@ -1006,12 +1072,14 @@ createDocumentGETWrap <- function(targetKeys){
     body = body,
     searchMultiPage = FALSE
   )
+
 }
 
 
 
 
 extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromBrowser = "", maxCheck = 5){
+
   XPathNr <- 1
   xpath <- ""
   text <- targetValues[1]
@@ -1026,8 +1094,8 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
 
   # text = allText[5]
   XPathAllCols <- lapply(
-    X = allText,
     FUN = getXPath,
+    X = allText,
     allText = allText,
     url = url,
     exact = exact,
@@ -1067,16 +1135,22 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
 
   # config parameter
   approximate <- TRUE
+
   if(approximate){
+
     lengths <- targetValues %>% nchar
     similarityRatio <- adist(x = targetValues, y = resultValues) %>%
       apply(MARGIN = 1, FUN = min) %>%
       divide_by(lengths)
     allFound <- similarityRatio %>%
       magrittr::is_less_than(0.1) %>% all
+
   }else{
+
     allFound <- all(targetValues %in% resultValues)
+
   }
+
   if(!all(allFound)) warning("not all targetvalues found!")
 
   responseString = resultValues
@@ -1084,8 +1158,11 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
     responseString = responseString,
     targetValues = targetValues
   )
+
   if(docType == "unknown type"){
+
     allFound <- TRUE
+
   }
 
   # todo: What do i want to do if not all values are found
@@ -1152,6 +1229,7 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list(), r
   # handle json arrays (wihout names)
   isJSONArray <- jsonContent %>% unlist %>% names %>% is.null
   isJSONArray
+
   if(isJSONArray){
 
     resultValues <- jsonContent[[1]]
@@ -1209,11 +1287,10 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list(), r
     }
 
     if(!is.null(JSONValues$targetKey) & !is.null(JSONValues$base)){
+
       if(tail(JSONValues$base, 1) == JSONValues$targetKey) JSONValues$base %<>% head(-1)
+
     }
-
-
-
 
     jsonToExtract <- list(
       reponse = "json",
@@ -1713,6 +1790,7 @@ baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys = NULL, extrac
     paste0(c(
     'library(DT)',
     'library(httr)',
+    'library(glue)',
     '# ", 1 + (nr - 1)*maxItems,"',
     '# ", maxItems*nr,"',
     '',
@@ -1729,7 +1807,7 @@ baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys = NULL, extrac
     '',
     '',
     'output <- list()',
-    'response <- "InitWithValue"',
+    'hasResult <- TRUE',
     'nr <- 1',
     ''
     ), collapse = "\n")
@@ -1738,7 +1816,7 @@ baseGETTemplate <- function(pageUrl, base, baseFollow, targetKeys = NULL, extrac
   sivis$xhrHeader <- xhrHeader
 
   request <- paste0(
-    c('while(length(response)){',
+    c('while(hasResult){',
       '\tSys.sleep(0.2)',
       '\tprint(nr)',
       '\turl <- scraper$urlGen(nr)',
@@ -1801,9 +1879,8 @@ createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathe
       '\toutput[[nr]] <- response',
       '\tnr <- nr + 1',
       '',
-      '\t######## INITIALLY ONLY ONE ROUND',
-      '\tresponse <- c()',
-      '\t######## INITIALLY ONLY ONE ROUND',
+      '\t#initially only one round',
+      '\thasResult <- length(response) & nr < 2',
       '}'
     ), collapse = "\n"
   )
@@ -3956,15 +4033,22 @@ anonymise <- function(str){
 }
 
 
-postToProduction <- function(mailAddress = "liebrr@gmail.com", doc = getActiveDocumentContext(), host = "http://192.168.1.4", ...){
+postToProduction <- function(mailAddress = "liebrr@gmail.com", doc = getActiveDocumentContext(), host = "http://192.168.1.11", port = 7192, ...){
 
-  rstudioapi::documentSave(id = doc$id) # does this work??
+  ####### Debug Plumber if it works.
+  # # set productive
+  # url <- paste0("http://192.168.1.11:7192/echo")
+  # httr::GET(url = url, body = "msg=asd") %>% content
+
+
+  rstudioapi::documentSave(id = doc$id)
 
   lines <- readLines(doc$path)
   start <- which(lines == "```{r}")[1] + 1
   end <- which(lines == "```")[1] - 1
   code <- lines[start:end] %>% paste(collapse = "\n")
-  print(code)
+
+  code %>% cat
 
   localTest <- eval(parse(text = code))
 
@@ -3984,10 +4068,10 @@ postToProduction <- function(mailAddress = "liebrr@gmail.com", doc = getActiveDo
     "&timing=", timing
   )
 
-  port <- "7192"
   method <- "setproductive"
   httr::POST(
     url = glue("{host}:{port}/{method}"),
     body = body
   ) %>% content %>% unlist
 }
+
