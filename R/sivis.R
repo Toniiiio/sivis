@@ -515,7 +515,7 @@ create_sivis <- function(cbData){
 
   }else{
 
-    sivis$useHeader <- noHeaderFailed
+    sivis$useHeader <- !noHeaderSuccess
 
   }
 
@@ -634,7 +634,7 @@ createScraper <- function(){
   #host <- "77.182.65.66"
   # host <<- "10.22.20.120"
 
-  sivis$cbData <- readClipboard() %>% fromJSON
+  sivis$cbData <- readClipboard() %>% jsonlite::fromJSON()
   sivis$cbData$clipBoardText$selectedText %>% head
   sivis$cbData$request$request$url
 
@@ -955,14 +955,14 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
 
     # nest in else if otherwise json with html is extracted and jumped right into html extraction without adjusting the inputs
     return(
-      evaluate_HTML(responseString, targetValues, extractPathes, XPathFromBrowser, maxCheck)
+      evaluate_HTML(responseString, targetValues, extractPathes, XPathFromBrowser, maxCheck, reqMethod, body, testEval, useHeader, XPathes, pageUrl)
     )
 
   }
 
 }
 
-evaluate_HTML <- function(responseString, targetValues, extractPathes, XPathFromBrowser, maxCheck){
+evaluate_HTML <- function(responseString, targetValues, extractPathes, XPathFromBrowser, maxCheck, reqMethod, body, testEval, useHeader, XPathes, pageUrl){
 
   # config parameter
   maxCheck = 5
@@ -991,6 +991,7 @@ evaluate_HTML <- function(responseString, targetValues, extractPathes, XPathFrom
       )
     }
 
+    reqMethod <- sivis$reqMethod
     testEval <- createDocument(
       pageUrl = pageUrl,
       reqMethod = reqMethod,
@@ -2265,6 +2266,7 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
 
 
 addMultiCols <- function(XPathes, responseString, extractPathes, searchMultiCols, pageUrl){
+  xx
   xp1 = XPathes
   sivis$XPathes <- XPathes
   # xp2 = extractPathes$xpath$ColAltern
@@ -2280,7 +2282,7 @@ addMultiCols <- function(XPathes, responseString, extractPathes, searchMultiCols
     do.call(what = cbind) %>%
     .[, colSums(is.na(.) | !nchar(.)) != nrow(.), drop = FALSE] %>% # remove NA cols
     .[, !duplicated(., MARGIN = 2), drop = FALSE] %>%  # remove duplicate cols
-    {.[colSums(apply(., 1, is.na)) != ncol(.), ]}  # and remove complete NA rows
+    {.[colSums(apply(., 1, is.na) %>% data.frame) != ncol(.), , drop = FALSE]}  # and remove complete NA rows
   #as.data.frame(col.names = colnames(.)) %>% # ensure two dimensions - not needed anymore due to drop = FALSE?
 
   if(length(addCols)){
@@ -2517,13 +2519,18 @@ CommonXPathData <- function(responseString, xp1, extractPathes){
       getOtherCols = FALSE,
       justOneTag = TRUE
     )
-    xp$xpath %>% substring(first = 2)
+
+    if(xp$xpath %>% substr(start = 1, stop = 5) != "/html"){
+      xp$xpath %>% substring(first = 2)
+    }
+
+    return(xp$xpath)
+
   })
   addXP
   leafPathes$subPathes %<>% c(addXP, .) %>% unlist %>% unique
 
-
-  # XPath <- leafPathes$subPathes[2]
+  # XPath <- leafPathes$subPathes[1]
   addCols <- lapply(
     X = leafPathes$subPathes,
     FUN = findTextGivenRoot,
@@ -3200,15 +3207,17 @@ getLeafPathes <- function(doc, tags){
   out <- list()
   nr <- 1
 
+  if(TRUE) aaa <- 99
+
   while(lenTags == len){
     tags <- tags %>% html_nodes(xpath = "..")
     out[[nr]] <- tags
     lenTags <- length(tags)
     nr <- nr + 1
-    if(nr > 70) stop("Too many iterations (70+) in getLeafPathes()")
+    if(nr > 70) stop("Too many iterations in getLeafPathes(). Stopped after iteration 70.")
   }
 
-  start <- out[[nr - 2]]
+  start <- out[[max(1, nr - 2)]]
   allText <- start %>% html_text
   tag <- start[1]
 
