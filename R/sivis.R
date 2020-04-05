@@ -14,7 +14,7 @@
 
 #https://www.teleflex.com/emea/de/careers/index.html
 #todo:leafpathes
-"https://www.royalcareersatsea.com/jobs/results/page:2"
+#"https://www.royalcareersatsea.com/jobs/results/page:2"
 #https://lifeatexpediagroup.com/jobs/?&page=2
 
 # pagechange for getrequest
@@ -29,8 +29,8 @@
 ##https://sjobs.brassring.com/TGnewUI/Search/Home/Home?partnerid=25678&siteid=5275#keyWordSearch=&locationSearch=
 
 #missing addcols`
-#"https://www.essexapartmenthomes.com/careers/jobs"
-#https://careers.questdiagnostics.com/en-US/search?pagenumber=2
+#"https://www.essexapartmenthomes.com/careers/jobs" DONE - now sivis fails
+#https://careers.questdiagnostics.com/en-US/search?pagenumber=2 400 status code
 #https://careers.leidos.com/search/jobs/in?page=2#
 #https://jobs.fcx.com/search/?searchby=location&createNewAlert=false&q=&locationsearch=&geolocation=
 #https://kcsouthern.silkroad.com/epostings/index.cfm?fuseaction=app.jobsearch
@@ -644,7 +644,7 @@ createScraper <- function(){
   # testRun = TRUE
   # success <- use_sivis(sivis, testRun = testRun)
   # success
-  testRun = FALSE
+  testRun <- FALSE
   testEval <- FALSE
   success <- use_sivis(sivis, testRun = testRun)
 
@@ -2134,6 +2134,7 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
         url = sivis$url,
         requestCode = Request_Extract
       )$func
+      if(is.null(urlFunc)) urlFunc <- glue("function(nr) {sivis$url}") %>% toString
 
       # need this for updatedocument function
       sivis$isMultiPage <- !is.null(urlFunc)
@@ -2180,7 +2181,7 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
       Code_1_LibUrl <-paste0(c(
         'library(httr)',
         'library(DT)',
-        paste0('url <- "', pageUrl, '"')),
+        paste0('url <- "', urlFunc, '"')),
         collapse = "\n"
       )
       Code_4_Display <- 'response %>% data.frame %>% DT::datatable()'
@@ -2266,12 +2267,11 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
 
 
 addMultiCols <- function(XPathes, responseString, extractPathes, searchMultiCols, pageUrl){
-  xx
+
   xp1 = XPathes
   sivis$XPathes <- XPathes
   # xp2 = extractPathes$xpath$ColAltern
 
-  print("999999999999999")
   commonXPathRes <- CommonXPathData(
     responseString = responseString,
     xp1 = xp1,
@@ -2527,8 +2527,10 @@ CommonXPathData <- function(responseString, xp1, extractPathes){
     return(xp$xpath)
 
   })
-  addXP
-  leafPathes$subPathes %<>% c(addXP, .) %>% unlist %>% unique
+
+  leafPathes$subPathes %<>% c(addXP, .) %>%
+    unlist %>%
+    unique
 
   # XPath <- leafPathes$subPathes[1]
   addCols <- lapply(
@@ -2540,7 +2542,7 @@ CommonXPathData <- function(responseString, xp1, extractPathes){
 
   addCols %<>% .[!is.null(.)]
 
-  addCols <- addCols[!sapply(addCols, is.null)]
+  addCols %<>% .[!sapply(., is.null)]
 
   addColsOutput <- sapply(addCols, "[", "texts") %>%
     do.call(what = cbind) %>%
@@ -2910,13 +2912,13 @@ checkXPath <- function(tagNameInsert, tags, AmtElemBefore = 1e6, XPathClass = ""
 # doc <- contInit %>% read_html
 # getXPathByText(text, doc, exact = FALSE, attr = NULL, byIndex = FALSE)
 getXPathByText <- function(text, doc, exact = FALSE, attr = NULL, byIndex = FALSE, onlyTags = FALSE){
+
   text %<>% tolower %>% gsub(pattern = " ", replacement = "")
   xpath <- paste0("//*[text()[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ', 'abcdefghijklmnopqrstuvwxyz'), '", text, "')]]")
   tag <- doc %>% html_nodes(xpath = xpath)
 
   tagName <- ""
   tags <- c()
-
 
   if(length(tag) > 1){
     tagNames <- sapply(tag, html_name)
@@ -3207,17 +3209,20 @@ getLeafPathes <- function(doc, tags){
   out <- list()
   nr <- 1
 
-  if(TRUE) aaa <- 99
-
   while(lenTags == len){
-    tags <- tags %>% html_nodes(xpath = "..")
     out[[nr]] <- tags
+    tags <- tags %>% html_nodes(xpath = "..")
     lenTags <- length(tags)
     nr <- nr + 1
     if(nr > 70) stop("Too many iterations in getLeafPathes(). Stopped after iteration 70.")
   }
 
-  start <- out[[max(1, nr - 2)]]
+  ### speculative change could it be that i need nr-1 or nr-2: https://www.youtube.com/watch?v=Gf4y0HoEkCU is example for nr-1
+  #### lets say i have lengths of 2,3, 72, 72, 72. I would want to have nr=3. He would start at 72 ->
+  # better way -> just compare length of out
+
+  idx <- (lengths(out) == len) %>% which %>% max %>% max(1) # to avoid integer(0) mismatch add max(1)
+  start <- out[[max(1, nr - 1)]] # use max, to avoid getting negative value for "nr".
   allText <- start %>% html_text
   tag <- start[1]
 
@@ -3234,6 +3239,16 @@ getLeafPathes <- function(doc, tags){
 
   leaves <- start %>% html_nodes(xpath = "*//*[not(descendant::*)]")
 
+  # if no results are found, but there is a parent which does not have other siblings,
+  # parent can be checked without risking to get false positives.
+  parent_node <- start %>% html_nodes(xpath = "..")
+  empty_but_valid_parent <- !length(leaves) & length(parent_node) == 1
+  if(empty_but_valid_parent){
+    leaves <- parent_node %>% html_nodes(xpath = "*//*[not(descendant::*)]")
+  }
+
+  parent_Leaves <- search_Parent_Nodes(leaves, rootPath, doc)
+
   leafPathes <- list()
   if(!length(leaves)){
     return(
@@ -3243,6 +3258,7 @@ getLeafPathes <- function(doc, tags){
       )
     )
   }
+
   nr <- nr + 1
   for(nr in 1:length(leaves)){
     leafPathes[[nr]] <- getXPathByTag(
@@ -3257,7 +3273,8 @@ getLeafPathes <- function(doc, tags){
     unlist %>%
     table %>%
     names %>%
-    substring(first = 2)
+    substring(first = 2) %>%
+    c(., parent_Leaves)
 
   if(is.null(rootPath)) rootPath <- "/*"
 
@@ -3267,6 +3284,38 @@ getLeafPathes <- function(doc, tags){
   )
 }
 
+search_Parent_Nodes <- function(leaves, rootPath, doc){
+
+  leaves_Parent <- leaves %>% html_nodes(xpath = "..")
+  leaves_GrantParent <- leaves_Parent %>% html_nodes(xpath = "..")
+
+  leaves_text <- leaves %>% html_text
+  leaves_Parent_Text <- leaves_Parent %>% html_text
+  leaves_GrantParent_Text <- leaves_GrantParent %>%
+    html_text %>%
+    gsub(pattern = paste(leaves_text, collapse = "|"), replacement = "") %>%
+    gsub(pattern = "  |\n", replacement = "")
+
+
+  #duples <- duplicated(leaves_GrantParent_Text, fromLast = TRUE) | duplicated(leaves_GrantParent_Text, fromLast = FALSE)
+  winner <- which(
+    sapply(
+      X = leaves_GrantParent_Text,
+      FUN = function(x){sapply(unique(leaves_GrantParent_Text), FUN = grepl, x = x, USE.NAMES = FALSE) %>% sum}
+    ) == 1
+  )
+
+  len <- length(leaves_GrantParent[winner])
+  res <- rep(NA, len)
+  for(nr in 1:len){
+    res[nr] <- getXPathByTag(tag = leaves_GrantParent[winner][nr], doc = doc, rootPath = rootPath)
+  }
+
+  return(
+    res %>% unique %>% unlist %>% substring(first = 2)
+  )
+
+}
 
 
 
