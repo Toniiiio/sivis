@@ -213,7 +213,7 @@ mult_divide_by <- function(key, operator = "*", factor = 2){
 
   if(isNumeric){
 
-    newKey <- get(operator)(key, factor)
+    newKey <- get(operator)(key, factor) %>% ceiling
 
   }else{
 
@@ -228,6 +228,7 @@ mult_divide_by <- function(key, operator = "*", factor = 2){
   newKey
 
 }
+
 
 
 # # procedure of numeric subpages
@@ -292,10 +293,104 @@ decode_SubPages_numeric <- function(nrows, decoded, codeAfter, before){
 }
 
 
+eval_paramChange <- function(before, initVal, currentKey, decoded, numericParams, codeAfter, operator = "*", amtItemsBefore){
+
+  pageChange = ""
+  amtItems = ""
+
+  params <- decoded$params
+  newVal <- get(operator)(initVal, 2)
+
+  #mutate_when always fails
+  params[params$key == currentKey, ]$val <- newVal
+  url <- encodeUrl(decoded$baseUrl, params)
+  print(url)
+
+  # will i need this as a seperate function?
+  # compareRequests <- function(before, url, codeAfter){
+  output <- NULL
+  response <- "" # can this be removed safely?
+  nr <- 1
+  tryCatch(eval(parse(text = codeAfter)), error = function(e) NULL)
+  after <- response %>% unlist
+  if(is.null(after) | !length(after)){
+    #warning(glue("second request for analying numeric params is empty, see: {url}."))
+    return(NULL)
+  }
+
+  amtItemsAfter <- sapply(after, length) %>%
+    table %>%
+    .[1] %>%
+    names %>%
+    as.numeric()
+  # if its unpacked already in an array. Need a better generic handler here.
+  if(typeof(after) == "character") amtItemsAfter <- length(after)
+  amtItemsAfter
+
+  amtItemMatch <- amtItemsAfter == newVal
+
+  if(amtItemMatch){
+
+    amtItems = decoded$params %>% dplyr::filter(key == currentKey)
+
+  }else{
+
+    # todo: redundant code: does another function make sense?
+    itemSizeCandidate <- amtItemsBefore == initVal
+    itemSizeCandidate
+    # above it was tried to find the new value by multiplying by 2. But this does not work if
+    # the itemSize parameter was already "maxed out". Therefore, if amount of results is equal
+    # to the parameter value, it could still be itemSize parameter and that should be checked
+    # by dividing by two.
+    if(itemSizeCandidate){
+
+      newVal <- initVal/2
+      params[params$key == currentKey, ]$val <- newVal
+
+      print(url)
+      url <- encodeUrl(decoded$baseUrl, params)
+      print(url)
+      after <- tryCatch(eval(parse(text = codeAfter)), error = function(e) NULL)
+
+      amtItemsAfter <- sapply(after, length) %>%
+        table %>%
+        .[1] %>%
+        names %>%
+        as.numeric()
+      # if its unpacked already in an array. Need a better generic handler here.
+      if(typeof(after) == "character") amtItemsAfter <- length(after)
+
+      amtItemMatch <- amtItemsAfter == newVal
+
+      if(amtItemMatch){
+
+        amtItems = decoded$params %>% dplyr::filter(key == currentKey)
+
+      }
+
+    }
+
+  }
+
+  resultsChanged <- !identical(before, after)
+  if(resultsChanged & !amtItemMatch){  # amtItemsBefore == amtItemsAfter &
+
+    pageChange = decoded$params %>% dplyr::filter(key == currentKey)
+    pageChange$startAt <- pageChange$val
+
+  }
+
+  list(
+    pageChange = pageChange,
+    amtItems = amtItems
+  )
+}
+
 #url <- sivis$url
 decodeQueryParams <- function(decoded, codeBefore, codeAfter, url){
 
   numericParams <- decoded$params %>% dplyr::filter(type == "hasNumeric")
+  params <- decoded$params
   response <- "" # can this be removed safely?
   amtItems <- ""
   pageChange <- ""
@@ -307,7 +402,7 @@ decodeQueryParams <- function(decoded, codeBefore, codeAfter, url){
   if(is.null(before)){
 
     cat(codeBefore)
-    stop("'before' request is empty. Request might have failed. Check it above:")
+    warning("'before' request is empty. Request might have failed. Check it above:")
 
   }
 
@@ -322,83 +417,34 @@ decodeQueryParams <- function(decoded, codeBefore, codeAfter, url){
 
   rowNr <- 1
   for(rowNr in 1:nrow(numericParams)){
-    params <- decoded$params
 
     initVal <- numericParams[rowNr, ]$val %>% as.numeric()
-
-    newVal <- initVal*2
     currentKey  <- numericParams[rowNr, ]$key
 
-    #mutate_when always fails
-    params[params$key == currentKey, ]$val <- newVal
-    url <- encodeUrl(decoded$baseUrl, params)
-    print(url)
+    res <- eval_paramChange(before, initVal, currentKey, decoded, numericParams, codeAfter, operator = "/", amtItemsBefore)
 
-    # will i need this as a seperate function?
-    # compareRequests <- function(before, url, codeAfter){
-    output <- NULL
-    response <- "" # can this be removed safely?
-    nr <- 1
-    tryCatch(eval(parse(text = codeAfter)), error = function(e) NULL)
-    after <- response %>% unlist
-    if(is.null(after)) warning(glue("second request for analying numeric params is empty, see: {url}."))
+    if(is.null(res)){
 
-    amtItemsAfter <- sapply(after, length) %>%
-      table %>%
-      .[1] %>%
-      names %>%
-      as.numeric()
-    # if its unpacked already in an array. Need a better generic handler here.
-    if(typeof(after) == "character") amtItemsAfter <- length(after)
-    amtItemsAfter
+      res <- eval_paramChange(before, initVal, currentKey, decoded, numericParams, codeAfter, operator = "/", amtItemsBefore)
 
-    amtItemMatch <- amtItemsAfter == newVal
-
-    if(amtItemMatch){
-
-      amtItems = decoded$params %>% dplyr::filter(key == currentKey)
-
-    }else{
-
-      # todo: redundant code: does another function make sense?
-      itemSizeCandidate <- amtItemsBefore == initVal
-      itemSizeCandidate
-      # above it was tried to find the new value by multiplying by 2. But this does not work if
-      # the itemSize parameter was already "maxed out". Therefore, if amount of results is equal
-      # to the parameter value, it could still be itemSize parameter and that should be checked
-      # by dividing by two.
-      if(itemSizeCandidate){
-        newVal <- initVal/2
-        params[params$key == currentKey, ]$val <- newVal
-
-        print(url)
-        url <- encodeUrl(decoded$baseUrl, params)
-        print(url)
-        after <- tryCatch(eval(parse(text = codeAfter)), error = function(e) NULL)
-
-        amtItemsAfter <- sapply(after, length) %>%
-          table %>%
-          .[1] %>%
-          names %>%
-          as.numeric()
-        # if its unpacked already in an array. Need a better generic handler here.
-        if(typeof(after) == "character") amtItemsAfter <- length(after)
-
-        amtItemMatch <- amtItemsAfter == newVal
-        if(amtItemMatch){
-          amtItems = decoded$params %>% dplyr::filter(key == currentKey)
-        }
-      }
     }
-    # print(amtItemsBefore)
-    # print(amtItemsAfter)
-    # print(identical(before, after))
 
-    resultsChanged <- !identical(before, after)
-    if(resultsChanged & !amtItemMatch){  # amtItemsBefore == amtItemsAfter &
+    if(is.null(res)){
 
-      pageChange = decoded$params %>% dplyr::filter(key == currentKey)
-      pageChange$startAt <- pageChange$val
+      next
+
+    }
+
+
+    if(nchar(res$pageChange)){
+
+      pageChange <- res$pageChange
+
+    }
+
+    if(nchar(res$amtItems)){
+
+      amtItems <- res$amtItems
 
     }
 
@@ -411,6 +457,7 @@ decodeQueryParams <- function(decoded, codeBefore, codeAfter, url){
     url <- encodeUrl(decoded$baseUrl, params)
 
     # url+json does not have direct return output. Need to go for variable: "output"
+    output <- NULL
     tryCatch(eval(parse(text = codeAfter)), error = function(e) NULL)
     x0  <- output %>% unlist
 

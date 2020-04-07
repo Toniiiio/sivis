@@ -31,20 +31,23 @@
 #missing addcols`
 #"https://www.essexapartmenthomes.com/careers/jobs" DONE - now sivis fails
 #https://careers.questdiagnostics.com/en-US/search?pagenumber=2 400 status code
-#https://careers.leidos.com/search/jobs/in?page=2#
-#https://jobs.fcx.com/search/?searchby=location&createNewAlert=false&q=&locationsearch=&geolocation=
-#https://kcsouthern.silkroad.com/epostings/index.cfm?fuseaction=app.jobsearch
-#https://careers.dovercorporation.com/search/?q=&sortColumn=referencedate&sortDirection=desc&startrow=25
-#https://careers.key.com/en-US/search?pagenumber=2
-# https://careers.firstrepublic.com/index.php?keyword=&search-openings=Search+Openings#
-# http://www.bestbuy-jobs.com/search/?sort=job_title&pg=6
-# http://jobs.prudential.com/job-listing.php?keyword=&jobType=&location=&jobLabel=&jobLocation=
+#https://careers.leidos.com/search/jobs/in?page=2# # done, but have strange rows and have to add (no children for first)
+#https://jobs.fcx.com/search/?searchby=location&createNewAlert=false&q=&locationsearch=&geolocation= # done, but additional crap
+#https://kcsouthern.silkroad.com/epostings/index.cfm?fuseaction=app.jobsearch # bug in rvest - cant fin all children, see https://kcsouthern.silkroad.com/epostings/index.cfm?fuseaction=app.jobsearch
+#https://careers.dovercorporation.com/search/?q=&sortColumn=referencedate&sortDirection=desc&startrow=25 # adpated that grepl doubles is done on leaf not of grandparent, not sure if had to but akes more sense
+#https://careers.key.com/en-US/search?pagenumber=2 400 status code: https://careers.key.com/en-US/search?pagenumber=2
+# https://careers.firstrepublic.com/index.php?keyword=&search-openings=Search+Openings# klappt jetzt
+# http://www.bestbuy-jobs.com/search/?sort=job_title&pg=6 # bug in rvest - cant fin all children, see https://kcsouthern.silkroad.com/epostings/index.cfm?fuseaction=app.jobsearch
+# http://jobs.prudential.com/job-listing.php?keyword=&jobType=&location=&jobLabel=&jobLocation= # request fails
 
 ######### pagechange in url
 #https://careers.leidos.com/search/jobs/in?page=2#
-#https://careers.questdiagnostics.com/en-US/search?pagenumber=2
-#"https://www.royalcareersatsea.com/jobs/results/page:2"
+#https://careers.questdiagnostics.com/en-US/search?pagenumber=2 sivis fails now
+#"https://www.royalcareersatsea.com/jobs/results/page:2" works now
 #https://lifeatexpediagroup.com/jobs/?&page=2
+
+### browser + server response differ - check showhtmlpage
+# https://jobs.fcx.com/search/?searchby=location&createNewAlert=false&q=&locationsearch=&geolocation=
 
 
 ####access denied
@@ -814,12 +817,22 @@ use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE, allow){
   extract_meta <- const_meta$extract_meta
   continue <- TRUE
 
+  responseString = extract_meta$responseString
+  docType = extract_meta$docType
+  extractPathes = extract_meta$extractPathes
+  iterNr = extract_meta$iterNr
+
   while(continue){
 
-    responseString = extract_meta$responseString
-    docType = extract_meta$docType
-    extractPathes = extract_meta$extractPathes
-    iterNr = extract_meta$iterNr
+    cbdata = const_meta$cbdata
+    reqMethod = const_meta$reqMethod
+    body = const_meta$body
+    XPathFromBrowser = const_meta$XPathFromBrowser
+    pageUrl = const_meta$pageUrl
+    targetValues = const_meta$targetValues
+    headers = const_meta$headers
+    useHeader = const_meta$useHeader
+
 
     extract_meta <- extracts_data(
       responseString = responseString,
@@ -827,14 +840,14 @@ use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE, allow){
       extractPathes = extractPathes,
       iterNr = iterNr,
 
-      cbdata = const_meta$cbdata,
-      reqMethod = const_meta$reqMethod,
-      body = const_meta$body,
-      XPathFromBrowser = const_meta$XPathFromBrowser,
-      pageUrl = const_meta$pageUrl,
-      targetValues = const_meta$targetValues,
-      headers = const_meta$headers,
-      useHeader = const_meta$useHeader,
+      cbdata = cbdata,
+      reqMethod = reqMethod,
+      body = body,
+      XPathFromBrowser = XPathFromBrowser,
+      pageUrl = pageUrl,
+      targetValues = targetValues,
+      headers = headers,
+      useHeader = useHeader,
 
       testRun = testRun,
       testEval = testEval
@@ -2031,7 +2044,7 @@ createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathe
 }
 
 createDocument <- function(pageUrl, extractPathes, responseString, testEval = FALSE, reqMethod = "GET", Code_3_Extract = NULL,
-                           useHeader = FALSE, body = NULL, XPathes = "", searchMultiCols = TRUE, rCode = NULL){
+                           useHeader = FALSE, body = NULL, XPathes = "", searchMultiPage = TRUE, searchMultiCols = TRUE, rCode = NULL){
 
   sivis$reqMethod <- reqMethod
   sivis$responseString <- responseString
@@ -2129,11 +2142,14 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
     }
 
     Request_Extract <- paste(c(Code_2_Request, Code_3_Extract), collapse = "\n")
-    if(searchMultiCols){
+
+    if(searchMultiPage){
+
       urlFunc <- dynamicUrl(
         url = sivis$url,
         requestCode = Request_Extract
       )$func
+
       if(is.null(urlFunc)) urlFunc <- glue("function(nr) {sivis$url}") %>% toString
 
       # need this for updatedocument function
@@ -2913,6 +2929,13 @@ checkXPath <- function(tagNameInsert, tags, AmtElemBefore = 1e6, XPathClass = ""
 # getXPathByText(text, doc, exact = FALSE, attr = NULL, byIndex = FALSE)
 getXPathByText <- function(text, doc, exact = FALSE, attr = NULL, byIndex = FALSE, onlyTags = FALSE){
 
+  if(is.character(doc)){
+
+    warning("doc is of type character - trying to convert to xml doc with xml2::read_html")
+    doc %<>% xml2::read_html()
+
+  }
+
   text %<>% tolower %>% gsub(pattern = " ", replacement = "")
   xpath <- paste0("//*[text()[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ', 'abcdefghijklmnopqrstuvwxyz'), '", text, "')]]")
   tag <- doc %>% html_nodes(xpath = xpath)
@@ -2953,25 +2976,27 @@ getOtherCols = TRUE
 getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allText = NULL, doc, rootPath = "/*", getOtherCols = TRUE, justOneTag = FALSE){
 
   if(!length(tag)) return(list(xpath = NULL))
-  if(is.null(rootPath)) rootPath <- "/*"
-  rootTags <- doc %>% html_nodes(xpath = rootPath)
-
-  tagName <- ""
-  xpElems <- ""
-
 
   tag <- as.list(tag)
-  iterTag <- tag # in case of debugging nike needed
+  if(html_name(tag) == "html") stop("iterTag is html root")
+
+  if(is.null(rootPath)) rootPath <- "/*"
+
+  rootTags <- doc %>% html_nodes(xpath = rootPath)
+  tagName <- ""
+  xpElems <- ""
   tagsOtherCols <- NULL
+  iterTag <- tag # in case of debugging nike needed
   XPathFound <- iterTag %in% rootTags
-  if(html_name(iterTag) == "html") stop("iterTag is html root")
 
   iterNr <- 1
   while(!XPathFound){
+
     tagName <- iterTag %>% html_name
     tagNameInsert <- tagName
 
     if(byIndex){
+
       childrenAll <- iterTag %>%
         html_nodes(xpath = "..") %>%
         html_nodes(xpath = "child::*")
@@ -2992,86 +3017,124 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
         {sum(.) / length(.)}
 
       hasAllChildren <- percentageFound > 0.7
-      if(is.null(allText)) hasAllChildren <- TRUE
 
-      firstRound <- is.null(xpElems)
+      # todo: where do i need - hasAllChildren <- TRUE??
+      # counterexample: addcols for https://jobs.fcx.com/search/?searchby=location&createNewAlert=false&q=&locationsearch=&geolocation=
+      if(is.null(allText)) hasAllChildren <- FALSE
 
       #  | notInAllTags
       # todo: do i really measure this correctly? Example: Blackrock
       # is a tradeoff - cant find all. but things might have changed since i removed
       # addcols calculation from here.
       tagMatch <- sapply(allText, FUN = grepl, x = childrenMatchText, fixed = TRUE)
+
       if(!length(tagMatch %>% unlist)){
+
         inJustOneTag <- FALSE
+
       }else{
+
         inJustOneTag <- tagMatch %>%
           as.data.frame %>%
           rowSums() %>%
           magrittr::equals(0) %>%
           {sum(.) == length(.) - 1}
+
       }
 
-      needIndex <- !hasAllChildren | firstRound | all(unique(xpElems) %in% "") #| inJustOneTag
+      needIndex <- !hasAllChildren | iterNr == 1 | all(unique(xpElems) %in% "") #| inJustOneTag
+
       if(justOneTag){
-        needIndex <- !hasAllChildren | firstRound | all(unique(xpElems) %in% "") | inJustOneTag
+
+        needIndex <- !hasAllChildren | iterNr == 1 | all(unique(xpElems) %in% "") | inJustOneTag
+
       }
+
       needIndex
       matches <- c()
       hasTarget <- FALSE
+
       if(needIndex){
+
         matches <- rep(0, length(childrenMatchTag))
         # dont need to set index if there is only one element with same tag type.
         # for consistency with chrome output.
 
         #if(length(iterTag) > 1) iterTag <- list(iterTag) # need to wrap in list so that i can find it children of its parents, see below.
         if(length(matches) > 1){
+
           for(nr in 1:length(childrenMatchTag)){
+
             matches[nr] <- identical(childrenMatchTag[nr], iterTag)
+
           }
+
           hasTarget <- allText %in% html_text(childrenMatchTag) %>% sum
 
           # Example: "httpsemploymentwellsfargocompscPSEAAPPLICANT_NWHRMScHRS_HRAM_FLHRS_CG_SEARCH_FLGBLPageHRS_APP_SCHJOB_.RData"
           # "Product Manager 2 - ETP, CEF and UIT" in "Job TitleProduct Manager 2 - ETP, CEF and UIT",
           # because children are div: JobTitle and span: Product Manager,....
           # but i need the indexing on that div level, so i have to accept this text merge.
+
           if(is.null(allText)){
+
             hasTarget <- 1
+
           }else{
+
             hasTarget <- sapply(allText, grepl, x = html_text(childrenMatchTag), fixed = TRUE) %>% sum
+
           }
 
           tagNameInsert <- glue("{tagName}[{which(matches == 1)}]")
           # now finding candidates for alternative columns that are displayed in the shiny overview.
           if(hasTarget) tagNameAltern <- glue("{tagName}[{which(matches != 1)}]")
+
         }
+
       }
+
       iterNr <- iterNr + 1
       # config parameter
       if(iterNr > 70) stop("Too many iterations (70+) in getxpathbytag()")
+
     }
 
     # todo: refactor
     if(!length(iterTag)){
+
       # need this if iterTag is empty: xml_nodeset of 0.
       XPathFound <- FALSE
+
     }else{
+
       # need this if it has two elements. need to better understand this.
       XPathFound <- iterTag %in% rootTags %>% sum | html_name(iterTag) == "html"
+
     }
 
     if(getOtherCols){
+
       if(length(matches) > 1 & hasTarget){
+
         tagsOtherCols <- tagNameAltern #lapply(tagNameAltern, function(tag) c(tags, tag))
+
       }else{
+
         if(!is.null(tagsOtherCols)){
+
           tagsOtherCols <- lapply(tagsOtherCols, function(tag) c(tag, tagNameInsert))
+
         }
+
       }
+
     }
 
     xpElems <- c(xpElems, tagNameInsert)
     iterTag <- iterTag %>% html_nodes(xpath = "..")
     # print(iterTag %>% html_text)
+
   }
 
   #todo: sometimes a tag "text" comes up, that i dont want. However, if i debug nike jobsite
@@ -3222,7 +3285,17 @@ getLeafPathes <- function(doc, tags){
   # better way -> just compare length of out
 
   idx <- (lengths(out) == len) %>% which %>% max %>% max(1) # to avoid integer(0) mismatch add max(1)
-  start <- out[[max(1, nr - 1)]] # use max, to avoid getting negative value for "nr".
+
+  # todo: how to avoid these double ifs. Arent there programming languages that
+  if(idx < length(out)){
+
+    if(lengths(out)[idx + 1] == 1) idx <- idx + 1
+
+  }
+
+
+  start <- out[[idx]]
+  # start <- out[[max(1, nr - 1)]] # use max, to avoid getting negative value for "nr".
   allText <- start %>% html_text
   tag <- start[1]
 
@@ -3237,14 +3310,20 @@ getLeafPathes <- function(doc, tags){
     getOtherCols = FALSE
   )$xpath
 
+  # weird workaround? https://stackoverflow.com/questions/61064681/how-do-i-find-all-non-parent-nodes-in-xpath-without-converting-to-string
+  #
+  # leaves <- start %>% toString %>% read_html %>% html_nodes(xpath = "*//*[not(descendant::*)]")
   leaves <- start %>% html_nodes(xpath = "*//*[not(descendant::*)]")
 
   # if no results are found, but there is a parent which does not have other siblings,
   # parent can be checked without risking to get false positives.
   parent_node <- start %>% html_nodes(xpath = "..")
   empty_but_valid_parent <- !length(leaves) & length(parent_node) == 1
+
   if(empty_but_valid_parent){
+
     leaves <- parent_node %>% html_nodes(xpath = "*//*[not(descendant::*)]")
+
   }
 
   parent_Leaves <- search_Parent_Nodes(leaves, rootPath, doc)
@@ -3259,7 +3338,6 @@ getLeafPathes <- function(doc, tags){
     )
   }
 
-  nr <- nr + 1
   for(nr in 1:length(leaves)){
     leafPathes[[nr]] <- getXPathByTag(
       tag = leaves[nr],
@@ -3276,6 +3354,7 @@ getLeafPathes <- function(doc, tags){
     substring(first = 2) %>%
     c(., parent_Leaves)
 
+
   if(is.null(rootPath)) rootPath <- "/*"
 
   list(
@@ -3284,24 +3363,25 @@ getLeafPathes <- function(doc, tags){
   )
 }
 
+# todo: leaves_Parent_Text in addition to grant_parent
 search_Parent_Nodes <- function(leaves, rootPath, doc){
 
   leaves_Parent <- leaves %>% html_nodes(xpath = "..")
   leaves_GrantParent <- leaves_Parent %>% html_nodes(xpath = "..")
 
-  leaves_text <- leaves %>% html_text
+  leaves_Text <- leaves %>% html_text
   leaves_Parent_Text <- leaves_Parent %>% html_text
   leaves_GrantParent_Text <- leaves_GrantParent %>%
     html_text %>%
-    gsub(pattern = paste(leaves_text, collapse = "|"), replacement = "") %>%
-    gsub(pattern = "  |\n", replacement = "")
+    gsub(pattern = paste(leaves_Text, collapse = "|"), replacement = "") %>%
+    gsub(pattern = "  |\n|\t", replacement = "")
 
 
   #duples <- duplicated(leaves_GrantParent_Text, fromLast = TRUE) | duplicated(leaves_GrantParent_Text, fromLast = FALSE)
   winner <- which(
     sapply(
-      X = leaves_GrantParent_Text,
-      FUN = function(x){sapply(unique(leaves_GrantParent_Text), FUN = grepl, x = x, USE.NAMES = FALSE) %>% sum}
+      X = leaves_GrantParent_Text, # replaced leaves_GrantParent_Text in line below otherwise i just search for duplicates?
+      FUN = function(x){sapply(unique(leaves_Text), FUN = grepl, x = x, USE.NAMES = FALSE) %>% sum}
     ) == 1
   )
 
@@ -4150,12 +4230,15 @@ anonymise <- function(str){
 }
 
 
+# host = "http://192.168.1.11"
+# port = 7192
+# mailAddress = "liebrr@gmail.com"
 postToProduction <- function(mailAddress = "liebrr@gmail.com", doc = getActiveDocumentContext(), host = "http://192.168.1.11", port = 7192, ...){
 
   ####### Debug Plumber if it works.
   # # set productive
   # url <- paste0("http://192.168.1.11:7192/echo")
-  # httr::GET(url = url, body = "msg=asd") %>% content
+  # httr::GET(url = url, body = "msg=asd", timeout = 1) %>% content
 
 
   rstudioapi::documentSave(id = doc$id)
@@ -4180,7 +4263,7 @@ postToProduction <- function(mailAddress = "liebrr@gmail.com", doc = getActiveDo
     URLencode(reserved = TRUE)
 
   body = paste0(
-    "code=", code,
+    "code=", "print(2)",
     "&mail=", mail,
     "&timing=", timing
   )
