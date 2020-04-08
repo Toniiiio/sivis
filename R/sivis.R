@@ -4,6 +4,7 @@
 #### new potential job source
 ## scale over company id
 ##  "https://jobsapi-internal.m-cloud.io/api/job?callback=jobsCallback&offset=11&sortfield=open_date&sortorder=descending&Limit=10&Organization=1909"
+#https://gatesfoundation.wd1.myworkdayjobs.com/Gates
 
 ### Randbedingungen
 # - nur Textdaten
@@ -33,18 +34,18 @@
 #https://careers.questdiagnostics.com/en-US/search?pagenumber=2 400 status code
 #https://careers.leidos.com/search/jobs/in?page=2# # done, but have strange rows and have to add (no children for first)
 #https://jobs.fcx.com/search/?searchby=location&createNewAlert=false&q=&locationsearch=&geolocation= # done, but additional crap
-#https://kcsouthern.silkroad.com/epostings/index.cfm?fuseaction=app.jobsearch # bug in rvest - cant fin all children, see https://kcsouthern.silkroad.com/epostings/index.cfm?fuseaction=app.jobsearch
+#https://kcsouthern.silkroad.com/epostings/index.cfm?fuseaction=app.jobsearch # fixed
 #https://careers.dovercorporation.com/search/?q=&sortColumn=referencedate&sortDirection=desc&startrow=25 # adpated that grepl doubles is done on leaf not of grandparent, not sure if had to but akes more sense
 #https://careers.key.com/en-US/search?pagenumber=2 400 status code: https://careers.key.com/en-US/search?pagenumber=2
 # https://careers.firstrepublic.com/index.php?keyword=&search-openings=Search+Openings# klappt jetzt
-# http://www.bestbuy-jobs.com/search/?sort=job_title&pg=6 # bug in rvest - cant fin all children, see https://kcsouthern.silkroad.com/epostings/index.cfm?fuseaction=app.jobsearch
+# http://www.bestbuy-jobs.com/search/?sort=job_title&pg=6 # fixed
 # http://jobs.prudential.com/job-listing.php?keyword=&jobType=&location=&jobLabel=&jobLocation= # request fails
 
 ######### pagechange in url
 #https://careers.leidos.com/search/jobs/in?page=2#
 #https://careers.questdiagnostics.com/en-US/search?pagenumber=2 sivis fails now
 #"https://www.royalcareersatsea.com/jobs/results/page:2" works now
-#https://lifeatexpediagroup.com/jobs/?&page=2
+#https://lifeatexpediagroup.com/jobs/?&page=2 works now
 
 ### browser + server response differ - check showhtmlpage
 # https://jobs.fcx.com/search/?searchby=location&createNewAlert=false&q=&locationsearch=&geolocation=
@@ -2318,8 +2319,11 @@ addMultiCols <- function(XPathes, responseString, extractPathes, searchMultiCols
     rootXpath <- commonXPathRes$rootXPath
 
     additionColExist <- ncol(addCols)
+
   }else{
+
     additionColExist <- FALSE
+
   }
 
   if(additionColExist){
@@ -3273,11 +3277,13 @@ getLeafPathes <- function(doc, tags){
   nr <- 1
 
   while(lenTags == len){
+
     out[[nr]] <- tags
     tags <- tags %>% html_nodes(xpath = "..")
     lenTags <- length(tags)
     nr <- nr + 1
     if(nr > 70) stop("Too many iterations in getLeafPathes(). Stopped after iteration 70.")
+
   }
 
   ### speculative change could it be that i need nr-1 or nr-2: https://www.youtube.com/watch?v=Gf4y0HoEkCU is example for nr-1
@@ -3313,7 +3319,7 @@ getLeafPathes <- function(doc, tags){
   # weird workaround? https://stackoverflow.com/questions/61064681/how-do-i-find-all-non-parent-nodes-in-xpath-without-converting-to-string
   #
   # leaves <- start %>% toString %>% read_html %>% html_nodes(xpath = "*//*[not(descendant::*)]")
-  leaves <- start %>% html_nodes(xpath = "*//*[not(descendant::*)]")
+  leaves <- start %>% html_nodes(xpath = ".//*[not(descendant::*)]")
 
   # if no results are found, but there is a parent which does not have other siblings,
   # parent can be checked without risking to get false positives.
@@ -3322,7 +3328,7 @@ getLeafPathes <- function(doc, tags){
 
   if(empty_but_valid_parent){
 
-    leaves <- parent_node %>% html_nodes(xpath = "*//*[not(descendant::*)]")
+    leaves <- parent_node %>% html_nodes(xpath = ".//*[not(descendant::*)]")
 
   }
 

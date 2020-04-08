@@ -150,6 +150,7 @@ getPageParameter_html_url <- function(url, codeBefore, codeAfter){
   hasNumericParams <- decoded$params %>%
     data.frame %>%
     filter(type == "hasNumeric") %>%
+    dplyr::filter(val >= 0) %>%
     nrow
 
   noParamData <- nrow(decoded$subPages) < 2 & !hasNumericParams
@@ -172,7 +173,9 @@ getPageParameter_html_url <- function(url, codeBefore, codeAfter){
 
 decodeSubPages <- function(decoded, codeBefore, codeAfter, url){
 
-  numericSubPages <- decoded$subPages %>% dplyr::filter(type == "hasNumeric")
+  numericSubPages <- decoded$subPages %>%
+    dplyr::filter(type == "hasNumeric") %>%
+    dplyr::filter(val >= 0)
 
   response <- "" # can this be removed safely?
   hasResult <- TRUE
@@ -246,7 +249,10 @@ decode_SubPages_numeric <- function(nrows, decoded, codeAfter, before){
   rowNr <- 1
   out <- list()
   subPages <- decoded$subPages
-  numericSubPages <- subPages %>% dplyr::filter(type == "hasNumeric")
+  numericSubPages <- subPages %>%
+    dplyr::filter(type == "hasNumeric") %>%
+    dplyr::filter(val >= 0)
+
   for(rowNr in seq(nrows)){
 
     # mutate_when fails to often
@@ -389,7 +395,10 @@ eval_paramChange <- function(before, initVal, currentKey, decoded, numericParams
 #url <- sivis$url
 decodeQueryParams <- function(decoded, codeBefore, codeAfter, url){
 
-  numericParams <- decoded$params %>% dplyr::filter(type == "hasNumeric")
+  numericParams <- decoded$params %>%
+    dplyr::filter(type == "hasNumeric") %>%
+    dplyr::filter(val >= 0)
+
   params <- decoded$params
   response <- "" # can this be removed safely?
   amtItems <- ""
@@ -511,7 +520,9 @@ getPageParameter <- function(url, codeBefore, codeAfter){
 
   decoded <- suppressWarnings(decodeUrl(url))
 
-  numericParams <- decoded$params %>% dplyr::filter(type == "hasNumeric")
+  numericParams <- decoded$params %>%
+    dplyr::filter(type == "hasNumeric") %>%
+    dplyr::filter(val >= 0)
 
   out <- list()
   response <- "" # can this be removed safely?
@@ -710,13 +721,22 @@ urlGenWithSubPages <- function(splitForPage){
 
 urlGenCode <- function(splitForPage, requestCode){
 
-  if(!nchar(splitForPage$pageChange) & !nchar(splitForPage$amtItems)) return(NULL)
+  has_Iterable_Params <- nchar(splitForPage$pageChange) | nchar(splitForPage$amtItems)
 
-  fixP <- splitForPage$fixParams
-
-  fixParamUrl <- apply(fixP[, 1:2], 1, paste0, collapse = "=") %>%
+  fixParamUrl <- apply(splitForPage$fixParams[, 1:2], 1, paste0, collapse = "=") %>%
     gsub(pattern = "&", replacement = "", fixed = TRUE) %>% # for redundant & that appear during splitting
     paste(collapse = "&")
+
+  if(!has_Iterable_Params){
+
+    urlGen <- glue('function(nr){{paste0("{splitForPage$baseUrl}?{fixParamUrl}")}}') %>%
+      parse(text = .) %>%
+      eval
+
+    return(urlGen)
+
+  }
+
 
   pageChangeVal <- splitForPage$pageChange$val %>% as.numeric
   # could also start at zero: E.g. url?...&startrow=25, also works for url?...&startrow=0.
@@ -805,10 +825,12 @@ urlGenCode <- function(splitForPage, requestCode){
   }
 
   return(
-    list(
-      urlGen = urlGen
-    )
+    urlGen
   )
+  #   list(
+  #     urlGen = urlGen
+  #   )
+  # )
 
 }
 
@@ -844,13 +866,13 @@ dynamicUrl <- function(url, requestCode){
   }else{ #splitForPage$urlPart == "queryParams"
 
     # 3. Build new url as a function with fixed itemsize and variable pagechange
-    func <- urlGenCode(splitForPage, requestCode)$urlGen
-    initVal <- splitForPage$pageChange$val %>% as.numeric %>% magrittr::divide_by(2)
+    func <- urlGenCode(splitForPage, requestCode) #$urlGen
+    #initVal <- splitForPage$pageChange$val %>% as.numeric %>% magrittr::divide_by(2) # can this be removed safely?
 
     return(
       list(
-        func = func,
-        initVal = initVal
+        func = func #,
+        #initVal = initVal
       )
     )
 
