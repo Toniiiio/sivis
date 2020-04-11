@@ -212,7 +212,12 @@ decodeSubPages <- function(decoded, codeBefore, codeAfter, url){
 #key <- "Page-2"
 mult_divide_by <- function(key, operator = "*", factor = 2){
 
-  isNumeric <- suppressWarnings(key %>% as.numeric %>% is.na %>% magrittr::not())
+  isNumeric <- suppressWarnings(
+    key %>%
+      as.numeric %>%
+      is.na %>%
+      magrittr::not()
+  )
 
   if(isNumeric){
 

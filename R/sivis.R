@@ -10,6 +10,17 @@
 # - nur Textdaten
 # - wenn mehrere Daten/Seiten, auf 2-X Seite gehen, weil dann alle Parameter da sind.
 
+# multipage errors:
+# https://careers.l3harris.com/search-jobs/
+
+
+# Problem in allJSONValues - variable baseCandidates - but did not find a good counter example yet.
+# need a json response with mutliple base candidate ("rows")
+# https://jobs.aon.com/api/jobs?page=2&sortBy=relevance&descending=false&internal=false
+
+# search_Parent_Nodes takes ages for ralph-lauren - too many subnodes?
+
+
 # cant find follow pages but have data
 # https://paychex.recsolu.com/job_boards/bMMxAXjFgvU0PrJcH0lNgw
 
@@ -57,7 +68,7 @@
 ###### 422 Unprocessable entities
 # https://jobs.marriott.com/marriott/jobs?page=1&limit=100
 # https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422
-
+# rewe.de captcha
 
 ####loads popup text only or wrong request? --> wrong request
 #https://www.governmentjobs.com/careers/cincinnati?page=2
@@ -114,9 +125,10 @@
 # todo: https://www.dmk.de/karriere/stellenangebote/?no_cache=1 --> mixed sources. First ones in document next in get requests.
 # todo: Shiny hat krasse doppelungen, zb auc hbei volkswagen
 # todo: Daimler geht net, findet den request net.
-# todo: allianz failed: IST EIN GET, aber sivis findet ihn net - xx <- "https://jobs.allianz.com/sap/hcmx/hitlist_na?sap-client=100&sap-language=de" %>% GET - x <- POST(url = "https://careers.allianz.com/etc/clientlibs/onemarketing/career/paths/jobsearch.json", encode = "json", body = list(formData = list(cityID = "", companyID = "", countryID = "32760000",     functionalAreaID = "", hierarchyLevelID = "", language = "de_DE",     orderBy = "desc", resultSet = "9", searchLimit = "9")))
+# todo: allianz failed: IST EIN GET, aber sivis findet ihn net - yy <- "https://jobs.allianz.com/sap/hcmx/hitlist_na?sap-client=100&sap-language=de" %>% GET - x <- POST(url = "https://careers.allianz.com/etc/clientlibs/onemarketing/career/paths/jobsearch.json", encode = "json", body = list(formData = list(cityID = "", companyID = "", countryID = "32760000",     functionalAreaID = "", hierarchyLevelID = "", language = "de_DE",     orderBy = "desc", resultSet = "9", searchLimit = "9")))
 # todo: Linde multi rvest add xpathes und page change
 #todo: sivis - cant click specific element
+# sivis fails: https://jobboerse.arbeitsagentur.de/vamJB/stellenangeboteFinden.html?d_6827794_p=2&execution=e1s2 request is correct, but result is not the same as in chrome network activities. no server prevention as robotstxt is cleaned.
 #todo: sivis: inpagesource falsch: https://www.ewe.com/de/karriere/aktuelle-stellenangebote.
 #todo: error in sivis insertData HTML https://stcareers.talent-soft.com/job/list-of-jobs.aspx?page=3&LCID=2057
 # todo: Missing clipboardtext: https://connekthq.com/plugins/ajax-load-more/examples/default/
@@ -309,12 +321,16 @@ sivis$GETContents <- list()
 
 create_sivis <- function(cbData){
 
-  sivis$headers <- cbData$request$request$headers %>% {setNames(object = .$value, nm = .$name)}
+  sivis$headers <- cbData$request$request$headers %>%
+    {setNames(object = .$value, nm = .$name)}
 
   hdr <- sivis$headers["accept-encoding"]
+
   if(grepl(pattern = "br", hdr)){
+
     message("Info: removing br(otli) as accepted encoding as its not supported by curl.")
     sivis$headers["accept-encoding"] <- gsub(pattern = ", br|br, ", replacement = "", x = hdr)
+
   }
 
   if(is.null(cbData$clipBoardText)) stop("no clipboard text")
@@ -325,11 +341,13 @@ create_sivis <- function(cbData){
   pageUrl <- cbData$request$request$url
   url = cbData$request$request$url # alternative: cbData$clipBoardText$pageUrl
   ##url <- cbData$clipBoardText$pageUrl
+
   if(grepl(pattern = pattern, x = url)){
+
     sivis$browserOutput$pageUrl %<>% gsub(pattern = pattern, replacement = "")
     url %<>% gsub(pattern = pattern, replacement = "")
-  }
 
+  }
 
   sivis$browserOutput <- cbData$clipBoardText
   targetValues <- sivis$cbData$clipBoardText$selectedText
@@ -438,7 +456,6 @@ create_sivis <- function(cbData){
   }
 
   withHeaders <- sivis$GETContents[[sivis$url]]
-
 
   # cant compare contents
   # example: https://www.macysjobs.com/search-results?
@@ -593,8 +610,8 @@ if(FALSE){
 
     # setwd("..")
     load("tests/testthat/types.RData")
-    xx <- sapply(types, "[[", "type")
-    ww <- xx[xx == "text/html"] %>% names
+    types <- sapply(types, "[[", "type")
+    ww <- types[types == "text/html"] %>% names
     fl <- ww[nr]
 
     # fl <- list.files(path = "R/fromWeb/", pattern = ".RData")[nr]
@@ -632,6 +649,7 @@ if(FALSE){
 
 ## fromChrome from chrome new scraper newscraper
 createScraper <- function(){
+
   nr <<- 19
 
   host <<- "192.168.1.11"
@@ -652,7 +670,7 @@ createScraper <- function(){
   testEval <- FALSE
   success <- use_sivis(sivis, testRun = testRun)
 
-  success
+  resuccess
 }
 
 
@@ -665,17 +683,18 @@ createScraper <- function(){
 # grep(pattern = "-", x = extract_meta$responseString2)
 
 
+
+
 prepare_Extract <- function(sivis){
 
   print("sivis$browserOutput$pageUrl")
   print(sivis$browserOutput$pageUrl)
-  #scrapeAllowed <- robotstxt::paths_allowed(paths = sivis$browserOutput$pageUrl, warn = FALSE)
-  #if(!scrapeAllowed) stop("robotstxt does not allow scraping this page.")
-  # example error: robotstxt::paths_allowed(paths = "https://www.google.com/")
-  # domain <- urltools::domain(sivis$browserOutput$pageUrl)
+
+  scrapeAllowed <- robotstxt::paths_allowed(paths = sivis$browserOutput$pageUrl, warn = FALSE)
+  if(!scrapeAllowed) stop("robotstxt does not allow scraping this page.")
+  domain <- urltools::domain(sivis$browserOutput$pageUrl)
   #httr::GET(url = paste0("https://www.", domain, "/robots.txt"))
 
-  # if(!scrapeAllowed) stop("")
 
   extract_meta <- list()
 
@@ -808,8 +827,6 @@ prepare_Extract <- function(sivis){
 }
 
 
-
-
 use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE, allow){
 
   const_meta <- prepare_Extract(sivis)
@@ -834,12 +851,11 @@ use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE, allow){
     headers = const_meta$headers
     useHeader = const_meta$useHeader
 
-
     extract_meta <- extracts_data(
-      responseString = responseString,
-      docType = docType,
-      extractPathes = extractPathes,
-      iterNr = iterNr,
+      responseString = extract_meta$responseString,
+      docType = extract_meta$docType,
+      extractPathes = extract_meta$extractPathes,
+      iterNr = extract_meta$iterNr,
 
       cbdata = cbdata,
       reqMethod = reqMethod,
@@ -962,21 +978,22 @@ extracts_data <- function(responseString, docType = NULL, cbdata, XPathFromBrows
   if(docType == "application/json"){
 
     return(
-      evaluate_JSON(responseString, targetValues, extractPathes, reqSingleQuote, pageUrl, reqMethod, headers, useHeader, body, testRun, testEval)
+      evaluate_JSON(iterNr, responseString, targetValues, extractPathes, reqSingleQuote, pageUrl, reqMethod, headers, useHeader, body, testRun, testEval, XPathFromBrowser)
     )
 
   }else if(docType == "text/html"){
 
     # nest in else if otherwise json with html is extracted and jumped right into html extraction without adjusting the inputs
     return(
-      evaluate_HTML(responseString, targetValues, extractPathes, XPathFromBrowser, maxCheck, reqMethod, body, testEval, useHeader, XPathes, pageUrl)
+      evaluate_HTML(iterNr, responseString, targetValues, extractPathes, XPathFromBrowser, maxCheck, reqMethod, body, testEval, useHeader, XPathes, pageUrl)
     )
 
   }
 
 }
 
-evaluate_HTML <- function(responseString, targetValues, extractPathes, XPathFromBrowser, maxCheck, reqMethod, body, testEval, useHeader, XPathes, pageUrl){
+
+evaluate_HTML <- function(iterNr, responseString, targetValues, extractPathes, XPathFromBrowser, maxCheck, reqMethod, body, testEval, useHeader, XPathes, pageUrl){
 
   # config parameter
   maxCheck = 5
@@ -1042,7 +1059,7 @@ evaluate_HTML <- function(responseString, targetValues, extractPathes, XPathFrom
 }
 
 
-evaluate_JSON <- function(responseString, targetValues, extractPathes, reqSingleQuote, pageUrl, reqMethod, headers, useHeader, body, testRun, testEval){
+evaluate_JSON <- function(iterNr, responseString, targetValues, extractPathes, reqSingleQuote, pageUrl, reqMethod, headers, useHeader, body, testRun, testEval, XPathFromBrowser){
 
   jsonStruct <- extract_JSON(
     responseString = responseString,
@@ -1219,12 +1236,6 @@ extract_HTML <- function(responseString, targetValues, extractPathes, XPathFromB
   )
 }
 
-
-
-# f <- JSON_from_String(xx %>% html_text, targetValues)
-# js <- f$jsons %>% fromJSON
-
-
 # For the scheduled scrape i want to extract by index not by targetvalue, since the target values wll change.
 # For the initial scrape i want to extract by target value. The index value i can not know so far.
 JSON_from_String <- function(str, regexStr = c(jsonObject = "\\{(?:[^{}]+|(?R))*?\\}"), reqSingleQuote = FALSE, targetValues = NULL, indexNr = NULL){
@@ -1270,6 +1281,7 @@ JSON_from_String <- function(str, regexStr = c(jsonObject = "\\{(?:[^{}]+|(?R))*
 
 
 extract_JSON <- function(responseString, targetValues, extractPathes = list(), reqSingleQuote = NULL){
+
   jsonContent <- lapply(responseString,  FUN = jsonlite::fromJSON)
 
   # handle json arrays (wihout names)
@@ -1287,6 +1299,7 @@ extract_JSON <- function(responseString, targetValues, extractPathes = list(), r
     maxValues <- 10
     targetValues <- targetValues[1:min(length(targetValues), maxValues)]
 
+    print("go")
     JSONValues <- allJSONValues(
       jsonContent = jsonContent,
       targetValues = targetValues
@@ -1537,7 +1550,7 @@ test_html <- function(responseString, targetValues){
   #
   # # todo: make better
   # # cant check for html and body, in case it is a html from a json, see: "httpscareersunderarmourcomsearchjobsresultsActiveFacetID0CurrentPage2RecordsPerPage10Distance50Radius.RData"
-  # # cant check for setdiff(tags, html/body), see XXXX am 01.02
+  # # cant check for setdiff(tags, html/body),  am 01.02
   # foundTags <- tags %>%
   #   sapply(FUN = grep, x = responseString) %>%
   #   lengths %>%
@@ -2518,10 +2531,15 @@ commonXPathes <- function(doc, xp1, xp2){
 CommonXPathData <- function(responseString, xp1, extractPathes){
 
   doc <- responseString %>% read_html
-
-  if(!length(html_node(x = doc, xpath = xp1))) stop(glue("Found an invalid XPath: {xp1} while attempting to find a commonXPath."))
-
   tags <- doc %>% html_nodes(xpath = xp1)
+
+  if(!length(tags)){
+
+    stop(glue("Found an invalid XPath: {xp1} while attempting to find a commonXPath."))
+
+  }
+
+
   leafPathes <- getLeafPathes(doc, tags)
 
   xpathes <- c(xp1, extractPathes$xpath$ColAltern)
@@ -3275,22 +3293,29 @@ getLeafPathes <- function(doc, tags){
   lenTags <- len
   out <- list()
   nr <- 1
+  has_valid_Parent <- lenTags == len & sum(tags %>% html_name != "html")
 
-  while(lenTags == len){
+  while(has_valid_Parent){
 
     out[[nr]] <- tags
     tags <- tags %>% html_nodes(xpath = "..")
     lenTags <- length(tags)
     nr <- nr + 1
+
+    has_valid_Parent <- lenTags == len & (tags %>% html_name != "html")
+    # should actually not happen, because before we should hit the html tag
     if(nr > 70) stop("Too many iterations in getLeafPathes(). Stopped after iteration 70.")
 
   }
 
-  ### speculative change could it be that i need nr-1 or nr-2: https://www.youtube.com/watch?v=Gf4y0HoEkCU is example for nr-1
+  ### speculative change could it be that i need nr-1 or nr-2: LINK is example for nr-1
   #### lets say i have lengths of 2,3, 72, 72, 72. I would want to have nr=3. He would start at 72 ->
   # better way -> just compare length of out
 
-  idx <- (lengths(out) == len) %>% which %>% max %>% max(1) # to avoid integer(0) mismatch add max(1)
+  idx <- (lengths(out) == len) %>%
+    which %>%
+    max %>%
+    max(1) # to avoid integer(0) mismatch --> add max(1)
 
   # todo: how to avoid these double ifs. Arent there programming languages that
   if(idx < length(out)){
@@ -3377,27 +3402,38 @@ search_Parent_Nodes <- function(leaves, rootPath, doc){
 
   leaves_Text <- leaves %>% html_text
   leaves_Parent_Text <- leaves_Parent %>% html_text
+
+  # require performance optimization here - still 13 seconds
+  # mgsub is more performance than gsub(pattern = targets %>% paste(collapse = "|"))
+  covered_text <- leaves_Text %>%
+    unique
+
+  # todo: could place this when i actually start the (optional) shiny app - might not always be used.
+  message("Start finding additional columns,... this could be time consuming.")
   leaves_GrantParent_Text <- leaves_GrantParent %>%
     html_text %>%
-    gsub(pattern = paste(leaves_Text, collapse = "|"), replacement = "") %>%
+    mgsub::mgsub(pattern = covered_text, replacement = rep("", length(covered_text))) %>%
     gsub(pattern = "  |\n|\t", replacement = "")
 
-
   #duples <- duplicated(leaves_GrantParent_Text, fromLast = TRUE) | duplicated(leaves_GrantParent_Text, fromLast = FALSE)
+  # want to remove redundant rows here. in code above
   winner <- which(
     sapply(
       X = leaves_GrantParent_Text, # replaced leaves_GrantParent_Text in line below otherwise i just search for duplicates?
-      FUN = function(x){sapply(unique(leaves_Text), FUN = grepl, x = x, USE.NAMES = FALSE) %>% sum}
+      FUN = function(x){sapply(unique(leaves_GrantParent_Text), FUN = grepl, x = x, USE.NAMES = FALSE) %>% sum}
     ) == 1
   )
 
   len <- length(leaves_GrantParent[winner])
   res <- rep(NA, len)
   for(nr in 1:len){
+
     res[nr] <- getXPathByTag(tag = leaves_GrantParent[winner][nr], doc = doc, rootPath = rootPath)
+
   }
 
   return(
+    # todo: get rid of first / as it is a subnode - could include that in getxpathbytag
     res %>% unique %>% unlist %>% substring(first = 2)
   )
 
@@ -3670,14 +3706,20 @@ subsetByStr <- function(lstRaw, arr, targetValues){
 # [1] "body"      "children"  "children"  "listItems" "title"     "instances"
 
 subsetByStr2 <- function(lstRaw, arr){
+
   lst <- lstRaw
   # nr <- 1
+
   for(nr in 1:length(arr)){
+
     if(is.null(names(lst))) lst <- lst[[1]]
     lst <-  lst[[arr[nr]]]
     nr <- nr + 1
+
   }
+
   lst
+
 }
 
 # arr = targetKey
@@ -3711,11 +3753,16 @@ subsetByStr2 <- function(lstRaw, arr){
 subsetByStr3 <- function(lstRaw, arr){
 
   if(typeof(lstRaw) == "list" & !is.data.frame(lstRaw)){
+
     # refactor: really dirty
     if(is.list(lstRaw[[1]]) & !is.data.frame(lstRaw[[1]])){
+
       if(is.null(lstRaw[[1]][[arr]]) & !is.null(lstRaw[[1]][[1]][[arr]]) & length(lstRaw) == 1){
+
         lstRaw <- lstRaw[[1]]
+
       }
+
     }
 
     # as.data.frame for     fl <- "httpshiremyaviontecomsonarv2jobBoardQ16L3ooLDFQW1VE2wFUOsQ.RData"
@@ -3728,10 +3775,14 @@ subsetByStr3 <- function(lstRaw, arr){
 
   # transformation fails: https://sjobs.brassring.com/TGnewUI/Search/Home/Home?partnerid=25679&siteid=5313#keyWordSearch=&locationSearch=
   if(!length(arrs)){
+
     warning("transformation of target keys failed.")
     arr %<>% adist(names(lstRaw)) %>% which.min %>% names(lstRaw)[.]
+
   }else{
+
     arr <- arrs %>% adist(arr) %>% which.min %>% arrs[.] #unique
+
   }
 
   if(is.null(arr)) stop("Do not find correct targetKeys for targetValues in json.")
@@ -3760,12 +3811,22 @@ matchStrings <- function(targetValue, candidates){
   relDistances <- (distances / min(nchar(targetValue), nchar(candidates)) < 0.05) %>% which
 
   if(length(directMatch)){
+
     winnerIndex <- directMatch
+
   }else if(length(relDistances)){
+
     warning(glue("Only approximate match for targetValue: '{targetValue}'. For string length: {nchar(targetValue)}."))
     winnerIndex <- relDistances
+
   }else{
-    winnerIndex <- grep(pattern = targetValue, x = candidates, fixed = TRUE)
+
+    winnerIndex <- grep(
+      pattern = targetValue,
+      x = candidates,
+      fixed = TRUE
+    )
+
   }
 
   #winnerIndex <- matchIdx[which.max(candidates[matchIdx] %>% nchar)]
@@ -3780,9 +3841,12 @@ matchStrings <- function(targetValue, candidates){
   # }
   # todo: check how to use. Currently hardly in use, because of approximate string match above.
   if(!length(winnerIndex)){
+
     warning(glue("no match for targetValue: {targetValue}"))
     return(NULL)
+
   }
+
   names(winnerIndex) <- "directMatch"
   return(winnerIndex)
 }
@@ -3799,6 +3863,7 @@ matchStrings <- function(targetValue, candidates){
 # index = 12
 
 allJSONValues <- function(jsonContent, targetValues){
+
   jsonContentFlat <- unlist(jsonContent)
 
   # since i allow for json array now, this test is not needed anymore !?
@@ -3857,7 +3922,9 @@ allJSONValues <- function(jsonContent, targetValues){
 
   }else{
 
-    targetKey <- targetKeyCount %>% which.max %>% names
+    targetKey <- targetKeyCount %>%
+      which.max %>%
+      names
 
   }
 
@@ -3885,7 +3952,7 @@ allJSONValues <- function(jsonContent, targetValues){
     magrittr::equals("text/html")
 
 
-  if(isLargeHTML){
+    if(isLargeHTML){
 
     return(
       list(
@@ -3915,9 +3982,13 @@ allJSONValues <- function(jsonContent, targetValues){
       amtSlimKeys <- targetKeysSlim %>% length
 
       if(amtSlimKeys == 1){
+
         targetKey <- paste0(targetKeysSlim, "[0-9]*$")
+
       }else{
+
         stop("Have too many targetKeys while extracting targetValues in JSON.")
+
       }
 
     }
@@ -3970,8 +4041,11 @@ allJSONValues <- function(jsonContent, targetValues){
   }else{
 
     if(baseCandidates %>% unlist %>% unique %>% length %>% magrittr::is_greater_than(1)){
+
       match <- NULL
+
     }else{
+
       match <- baseCandidates %>%
         unlist %>%
         .[1]
@@ -3987,7 +4061,9 @@ allJSONValues <- function(jsonContent, targetValues){
         pattern = "[0-9]",
         replacement = ""
       )
+
       if(tail(match, 1) == targetKey | lastValSlim == targetKey) match %<>% head(n = -1)
+
     }
 
   }
@@ -4239,7 +4315,7 @@ anonymise <- function(str){
 # host = "http://192.168.1.11"
 # port = 7192
 # mailAddress = "liebrr@gmail.com"
-postToProduction <- function(mailAddress = "liebrr@gmail.com", doc = getActiveDocumentContext(), host = "http://192.168.1.11", port = 7192, ...){
+postToProduction <- function(mailAddress = "liebrr@gmail.com", doc = getActiveDocumentContext(), host = "http://192.168.1.11", port = 7192, prod_Iterations = 1e5, ...){
 
   ####### Debug Plumber if it works.
   # # set productive
@@ -4271,7 +4347,8 @@ postToProduction <- function(mailAddress = "liebrr@gmail.com", doc = getActiveDo
   body = paste0(
     "code=", "print(2)",
     "&mail=", mail,
-    "&timing=", timing
+    "&timing=", timing,
+    "&prod_Iterations=", prod_Iterations
   )
 
   method <- "setproductive"
@@ -4280,4 +4357,35 @@ postToProduction <- function(mailAddress = "liebrr@gmail.com", doc = getActiveDo
     body = body
   ) %>% content %>% unlist
 }
+
+
+txt <- "
+library(dplyr)
+library(rlang)
+
+1+1
+"
+
+silent_pack <- function(code){
+
+  pattern <- code %>%
+    gregexpr(pattern = "library[(].*?[)]", perl = TRUE) %>%
+    regmatches(x = code) %>%
+    unlist
+
+  if(!length(pattern)) return(code)
+
+  replace <- pattern %>%
+  {glue::glue("suppressMessages({.})")}
+
+  mgsub::mgsub(
+    pattern = pattern,
+    replacement = replace,
+    string = code,
+    fixed = TRUE) %>%
+    cat
+
+}
+
+silent_pack(txt)
 
