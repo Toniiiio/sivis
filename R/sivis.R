@@ -1,5 +1,7 @@
 
-
+# bitlocker features
+# - in .rmd joined all output to result
+# - joined all pagechange to one function
 
 #### new potential job source
 ## scale over company id
@@ -13,6 +15,14 @@
 # multipage errors:
 # https://careers.l3harris.com/search-jobs/
 
+# json target keys not added:
+# https://careers.wm.com/professional/us/en/search-results?from=50&s=1
+
+# collect links
+#https://careers.moodys.com/jobs?jobpage=2
+
+# split in rootpath causes extra rows
+#https://careers.moodys.com/jobs?jobpage=2
 
 # Problem in allJSONValues - variable baseCandidates - but did not find a good counter example yet.
 # need a json response with mutliple base candidate ("rows")
@@ -28,9 +38,6 @@
 #todo:leafpathes
 #"https://www.royalcareersatsea.com/jobs/results/page:2"
 #https://lifeatexpediagroup.com/jobs/?&page=2
-
-# pagechange for getrequest
-# https://careers.equifax.com/global/en/c/technology-jobs?from=20&s=1
 
 
 # aufbröseln von c() bei jsons?
@@ -52,11 +59,18 @@
 # http://www.bestbuy-jobs.com/search/?sort=job_title&pg=6 # fixed
 # http://jobs.prudential.com/job-listing.php?keyword=&jobType=&location=&jobLabel=&jobLocation= # request fails
 
-######### pagechange in url
+
+# pagechange for getrequest - open
+# https://careers.equifax.com/global/en/c/technology-jobs?from=20&s=1
+# avoid divide by 2: "https://jobs.nscorp.com/search/?q=&sortColumn=referencedate&sortDirection=desc&startrow=12.5"
+
+######### pagechange in url - works now at least in bitlock version
 #https://careers.leidos.com/search/jobs/in?page=2#
 #https://careers.questdiagnostics.com/en-US/search?pagenumber=2 sivis fails now
 #"https://www.royalcareersatsea.com/jobs/results/page:2" works now
 #https://lifeatexpediagroup.com/jobs/?&page=2 works now
+
+
 
 ### browser + server response differ - check showhtmlpage
 # https://jobs.fcx.com/search/?searchby=location&createNewAlert=false&q=&locationsearch=&geolocation=
@@ -73,7 +87,7 @@
 ####loads popup text only or wrong request? --> wrong request
 #https://www.governmentjobs.com/careers/cincinnati?page=2
 #https://careers.equityapartments.com/ListJobs/All/Page-2
-
+# https://careers.regeneron.com/search-results?from=100&s=1
 
 ##### false candidates need classes or check children. but cant
 
@@ -526,7 +540,7 @@ create_sivis <- function(cbData){
 
   }
 
-  onlyNoHeaderSuccess <- !withHeaderSuccess & !noHeaderSuccess
+  onlyNoHeaderSuccess <- !withHeaderSuccess & noHeaderSuccess
 
   if(onlyNoHeaderSuccess){
 
@@ -645,9 +659,7 @@ if(FALSE){
 }
 
 
-
-
-## fromChrome from chrome new scraper newscraper
+## fromChrome from chrome new scraper
 createScraper <- function(){
 
   nr <<- 19
@@ -668,9 +680,10 @@ createScraper <- function(){
   # success
   testRun <- FALSE
   testEval <- FALSE
+  #newscraper
   success <- use_sivis(sivis, testRun = testRun)
 
-  resuccess
+  success
 }
 
 
@@ -682,18 +695,44 @@ createScraper <- function(){
 # grep(pattern = "&#8211;", x = extract_meta$responseString2)
 # grep(pattern = "-", x = extract_meta$responseString2)
 
-
-
-
 prepare_Extract <- function(sivis){
 
   print("sivis$browserOutput$pageUrl")
   print(sivis$browserOutput$pageUrl)
 
-  scrapeAllowed <- robotstxt::paths_allowed(paths = sivis$browserOutput$pageUrl, warn = FALSE)
-  if(!scrapeAllowed) stop("robotstxt does not allow scraping this page.")
-  domain <- urltools::domain(sivis$browserOutput$pageUrl)
-  #httr::GET(url = paste0("https://www.", domain, "/robots.txt"))
+  scrapeAllowed <- robotstxt::paths_allowed(
+    paths = sivis$browserOutput$pageUrl,
+    warn = FALSE
+  )
+
+  if(!scrapeAllowed){
+
+    domain <- urltools::domain(sivis$browserOutput$pageUrl)
+    robots_URL <- paste0("https://", domain, "/robots.txt")
+
+    base::message(
+      glue::glue("robotstxt does not allow scraping this page, see {robots_URL}.")
+    )
+
+    user_choice <- menu(
+      choices = c("Yes", "No"),
+      title = "Do you want to continue anyway?" #the page now?
+    )
+
+    if(user_choice == 1){
+
+      #utils::browseURL(url = robots_URL)
+
+    }else{
+
+      return(NULL)
+
+    }
+
+  }
+
+
+
 
 
   extract_meta <- list()
@@ -827,10 +866,11 @@ prepare_Extract <- function(sivis){
 }
 
 
-use_sivis <- function(sivis, testRun = TRUE, testEval = FALSE, allow){
+use_sivis <- function(sivis = sivis, testRun = FALSE, testEval = FALSE){
 
   const_meta <- prepare_Extract(sivis)
 
+  if(is.null(const_meta)) return()
 
   extract_meta <- const_meta$extract_meta
   continue <- TRUE
@@ -2025,7 +2065,7 @@ createDocumentGET <- function(pageUrl = pageUrl, targetKeys = NULL, extractPathe
                     'Put scraper to production:',
                     '',
                     '```{r}',
-                    paste0(c('postToProduction(host = "http://', host,'")'), collapse = ""),
+                    paste0(c('post_To_Production(host = "http://', host,'")'), collapse = ""),
                     '```',
                     '',
                     'Potential new fields to consider:',
@@ -2198,7 +2238,7 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
 
       # config parameter: limit loop
       Code_4_Display <- paste0(c(
-        '\thasResult <- length(response) & nr < 5',
+        '\thasResult <- length(response) & nr < 3',
         '\toutput[[nr]] <- response',
         'nr <- nr + 1',
         '}',
@@ -2282,7 +2322,7 @@ createDocument <- function(pageUrl, extractPathes, responseString, testEval = FA
 
                    '',
                    '```{r}',
-                   paste0(c('postToProduction(host = "http://', host,'")'), collapse = ""),
+                   paste0(c('post_To_Production(host = "http://', host,'")'), collapse = ""),
                    '```',
                    '',
 
@@ -2302,7 +2342,7 @@ addMultiCols <- function(XPathes, responseString, extractPathes, searchMultiCols
   sivis$XPathes <- XPathes
   # xp2 = extractPathes$xpath$ColAltern
 
-  commonXPathRes <- CommonXPathData(
+  commonXPathRes <- Common_XPath_Data(
     responseString = responseString,
     xp1 = xp1,
     extractPathes = extractPathes
@@ -2310,7 +2350,8 @@ addMultiCols <- function(XPathes, responseString, extractPathes, searchMultiCols
 
   addCols <- commonXPathRes$addColsOutput %>%
     do.call(what = cbind) %>%
-    .[, colSums(is.na(.) | !nchar(.)) != nrow(.), drop = FALSE] %>% # remove NA cols
+    apply(MARGIN = 2, FUN = gsub, pattern = "  |\t|\n|\r|View More|[|]", replacement = "") %>% # to better identify duplicates - could be made as config parameter
+    .[, colSums(is.na(.) | !nchar(.) | . == " ") != nrow(.), drop = FALSE] %>% # remove NA cols
     .[, !duplicated(., MARGIN = 2), drop = FALSE] %>%  # remove duplicate cols
     {.[colSums(apply(., 1, is.na) %>% data.frame) != ncol(.), , drop = FALSE]}  # and remove complete NA rows
   #as.data.frame(col.names = colnames(.)) %>% # ensure two dimensions - not needed anymore due to drop = FALSE?
@@ -2364,6 +2405,7 @@ addMultiCols <- function(XPathes, responseString, extractPathes, searchMultiCols
       pageUrl = pageUrl,
       selectedCol = 0 # initially only the column is selected, that was selected in the browser.
     )
+    sivis$rootXpath <- rootXpath
   }
 
   if(!additionColExist & searchMultiCols){
@@ -2528,7 +2570,7 @@ commonXPathes <- function(doc, xp1, xp2){
   commonXPath
 }
 
-CommonXPathData <- function(responseString, xp1, extractPathes){
+Common_XPath_Data <- function(responseString, xp1, extractPathes){
 
   doc <- responseString %>% read_html
   tags <- doc %>% html_nodes(xpath = xp1)
@@ -2540,11 +2582,17 @@ CommonXPathData <- function(responseString, xp1, extractPathes){
   }
 
 
-  leafPathes <- getLeafPathes(doc, tags)
+  leafPathes <- get_Leaf_Pathes(doc, tags)
 
   xpathes <- c(xp1, extractPathes$xpath$ColAltern)
+  if(nchar(leafPathes$link_Path)){
 
-  # xpath <- xpathes[1]
+    xpathes %<>% c(., leafPathes$link_Path)
+
+  }
+
+
+  # xpath <- xpathes[2]
   addXP <- sapply(xpathes, FUN = function(xpath){
     tags <- html_nodes(x = doc, xpath = xpath)
     allText <- tags %>% html_text
@@ -2908,7 +2956,7 @@ getXPath <- function(url, text = NULL, xpath = NULL, exact = FALSE, doc = NULL, 
   }
 
   ColsAltern %<>% unlist %>% unique
-  ###########getLeafPathes(doc, tag)
+  ###########get_Leaf_Pathes(doc, tag)
   list(
     xpathes = xpathes,
     ColsAltern = ColsAltern
@@ -3287,24 +3335,43 @@ getXPathByTag <- function(tag, exact = FALSE, attr = NULL, byIndex = TRUE, allTe
 # }
 
 
-getLeafPathes <- function(doc, tags){
+get_Leaf_Pathes <- function(doc, tags){
 
   len <- length(tags)
   lenTags <- len
   out <- list()
   nr <- 1
   has_valid_Parent <- lenTags == len & sum(tags %>% html_name != "html")
+  link_Path <- ""
 
   while(has_valid_Parent){
 
     out[[nr]] <- tags
+
+    hasLink <- tags %>%
+      html_name %>%
+      magrittr::equals("a") %>%
+      sum
+
+    if(hasLink){
+
+      href <- tags %>% html_attr(name = "href")
+
+      if(href %>% nchar %>% sum){
+
+        link_Path <- getXPathByTag(tag = tags[1], doc = doc)$xpath
+
+      }
+
+    }
+
     tags <- tags %>% html_nodes(xpath = "..")
     lenTags <- length(tags)
     nr <- nr + 1
 
-    has_valid_Parent <- lenTags == len & (tags %>% html_name != "html")
+    has_valid_Parent <- (tags %>% html_name != "html") # let iter till html otherwise cant catch parent of link a with lenTags == len &
     # should actually not happen, because before we should hit the html tag
-    if(nr > 70) stop("Too many iterations in getLeafPathes(). Stopped after iteration 70.")
+    if(nr > 70) stop("Too many iterations in get_Leaf_Pathes(). Stopped after iteration 70.")
 
   }
 
@@ -3318,23 +3385,24 @@ getLeafPathes <- function(doc, tags){
     max(1) # to avoid integer(0) mismatch --> add max(1)
 
   # todo: how to avoid these double ifs. Arent there programming languages that
-  if(idx < length(out)){
-
-    if(lengths(out)[idx + 1] == 1) idx <- idx + 1
-
-  }
+  # tried to use for allow 50, 50 , 1 catch one as it does not have other children and
+  # catch link. Does not work.
+  # if(idx < length(out)){
+  #
+  #   if(lengths(out)[idx + 1] == 1) idx <- idx + 1
+  #
 
 
   start <- out[[idx]]
   # start <- out[[max(1, nr - 1)]] # use max, to avoid getting negative value for "nr".
   allText <- start %>% html_text
-  tag <- start[1]
+
+  start_Tag <- start[1]
 
   #### ASSUMPTION: since i need the xpath just as the upper bound root path, i can try to
   ### leave out the indexing
-  tag <- start[1]
   rootPath <- getXPathByTag(
-    tag = start[1],
+    tag = start_Tag,
     doc = doc,
     allText = allText,
     byIndex = FALSE,
@@ -3361,22 +3429,67 @@ getLeafPathes <- function(doc, tags){
 
   leafPathes <- list()
   if(!length(leaves)){
+
     return(
       list(
         subPathes = NULL,
         rootPath = NULL
       )
     )
+
   }
 
   for(nr in 1:length(leaves)){
+
     leafPathes[[nr]] <- getXPathByTag(
       tag = leaves[nr],
       rootPath = rootPath,
       doc = doc,
       getOtherCols = FALSE
     )$xpath
+
   }
+
+
+  # group them by similarity
+  ########## new experimental -  to start a node higher and catch link for https://careers.moodys.com/jobs?jobpage=2
+  ### -> difficult due to sthg like:
+  #### [19]  id="jobTitle_2578"
+  #### [20]  href="index.cfm?fuseaction=app.jobinfo&amp;jobid=2578&amp;source=ONLINE&amp;JobOwner=993583&amp;com
+
+  # tag_name <- leaves %>% html_name
+  # tag_name_attr <- leaves %>%
+  #   html_nodes(xpath = "@*") %>%
+  #   paste(tag_name)
+  #
+  # leaves_by_Group <- sapply(tag_name_attr, FUN = "==", tag_name_attr) %>%
+  #   apply(MARGIN = 1, FUN = which) %>%
+  #   { .[, !duplicated(t(.))] } %>%
+  #   apply(X = ., MARGIN = 2, FUN = function(idx) leaves[idx])
+  #
+  #
+  # group_Nr <- 1
+  # leaf_Nr <- 1
+  # leafPathes <- list()
+  # for(group_Nr in 1:length(leaves_by_Group)){
+  #
+  #    group <- leaves_by_Group[[group_Nr]]
+  #    group_List <- list()
+  #    for(leaf_Nr in 1:length(group)){
+  #
+  #      group_List[[leaf_Nr]] <- getXPathByTag(
+  #       tag = group[leaf_Nr],
+  #       allText = group %>% html_text,
+  #       rootPath = rootPath,
+  #       doc = doc,
+  #       getOtherCols = FALSE
+  #     )$xpath
+  #
+  #    }
+  #
+  #    leafPathes[[group_Nr]] <- group_List
+  #
+  # }
 
   subPathes <- leafPathes %>%
     unlist %>%
@@ -3390,8 +3503,31 @@ getLeafPathes <- function(doc, tags){
 
   list(
     subPathes = subPathes,
-    rootPath = rootPath
+    rootPath = rootPath,
+    link_Path = link_Path
   )
+
+}
+
+
+mgsub2 <- function(string, pattern, replacement, recycle = FALSE, ...){
+
+  if(!sum(nchar(pattern))){
+
+    return(string)
+
+  }
+
+  pattern %<>% .[. != ""]
+
+  if(length(replacement) == 1){
+
+    replacement %<>% rep(length(pattern))
+
+  }
+
+  mgsub::mgsub(string, pattern, replacement, recycle, ...)
+
 }
 
 # todo: leaves_Parent_Text in addition to grant_parent
@@ -3412,29 +3548,54 @@ search_Parent_Nodes <- function(leaves, rootPath, doc){
   message("Start finding additional columns,... this could be time consuming.")
   leaves_GrantParent_Text <- leaves_GrantParent %>%
     html_text %>%
-    mgsub::mgsub(pattern = covered_text, replacement = rep("", length(covered_text))) %>%
-    gsub(pattern = "  |\n|\t", replacement = "")
+    mgsub2(pattern = covered_text, replacement = "", fixed = TRUE) %>%
+    mgsub2(pattern = c(" ", "\n", "\t", "\r", "|"), replacement = "", fixed = TRUE)
 
   #duples <- duplicated(leaves_GrantParent_Text, fromLast = TRUE) | duplicated(leaves_GrantParent_Text, fromLast = FALSE)
   # want to remove redundant rows here. in code above
-  winner <- which(
-    sapply(
-      X = leaves_GrantParent_Text, # replaced leaves_GrantParent_Text in line below otherwise i just search for duplicates?
-      FUN = function(x){sapply(unique(leaves_GrantParent_Text), FUN = grepl, x = x, USE.NAMES = FALSE) %>% sum}
-    ) == 1
+
+  txt <- leaves_GrantParent_Text[1]
+  unique_txt <- sapply(
+    X = leaves_GrantParent_Text, # replaced leaves_GrantParent_Text in line below otherwise i just search for duplicates?
+    FUN = function(txt){
+      other_txts <- leaves_GrantParent_Text[leaves_GrantParent_Text != txt]
+      mgsub2(string = txt, pattern = other_txts %>% toString, replacement = "", fixed = TRUE)
+    }
   )
 
-  len <- length(leaves_GrantParent[winner])
-  res <- rep(NA, len)
-  for(nr in 1:len){
+  new_data <- unique_txt %>%
+    gsub(pattern = " ", replacement = "") %>% # prevent that str = " " stays
+    nchar %>%
+    magrittr::is_greater_than(0) %>%
+    which %>% leaves_GrantParent[.]
 
-    res[nr] <- getXPathByTag(tag = leaves_GrantParent[winner][nr], doc = doc, rootPath = rootPath)
+  len <- new_data %>% length
+  res <- rep(NA, len)
+
+  if(length(res)){
+
+    for(nr in 1:len){
+
+      res[nr] <- getXPathByTag(
+        tag = new_data[nr],
+        doc = doc,
+        allText = new_data %>% html_text,
+        rootPath = rootPath
+      )
+
+    }
 
   }
 
+
   return(
+
     # todo: get rid of first / as it is a subnode - could include that in getxpathbytag
-    res %>% unique %>% unlist %>% substring(first = 2)
+    res %>%
+      unique %>%
+      unlist %>%
+      substring(first = 2)
+
   )
 
 }
@@ -4312,18 +4473,7 @@ anonymise <- function(str){
 }
 
 
-# host = "http://192.168.1.11"
-# port = 7192
-# mailAddress = "liebrr@gmail.com"
-postToProduction <- function(mailAddress = "liebrr@gmail.com", doc = getActiveDocumentContext(), host = "http://192.168.1.11", port = 7192, prod_Iterations = 1e5, ...){
-
-  ####### Debug Plumber if it works.
-  # # set productive
-  # url <- paste0("http://192.168.1.11:7192/echo")
-  # httr::GET(url = url, body = "msg=asd", timeout = 1) %>% content
-
-
-  rstudioapi::documentSave(id = doc$id)
+post_Code_As_Is <- function(doc, prod_Iterations, mail, timing) {
 
   lines <- readLines(doc$path)
   start <- which(lines == "```{r}")[1] + 1
@@ -4338,24 +4488,80 @@ postToProduction <- function(mailAddress = "liebrr@gmail.com", doc = getActiveDo
   # code <- URLencode("GET('http://www.r-bloggers.com')", reserved = TRUE)
   #URLdecode(code) -> f
   #eval(parse(text = f))
-  mail <- URLencode(mailAddress, reserved = TRUE, repeated = TRUE)
-
-  timing <- "" %>% #list(...)
-    safeDeparse() %>%
-    URLencode(reserved = TRUE)
 
   body = paste0(
-    "code=", "print(2)",
+    "code=", code,
     "&mail=", mail,
     "&timing=", timing,
     "&prod_Iterations=", prod_Iterations
   )
 
-  method <- "setproductive"
+  method <- "code_As_Is"
   httr::POST(
     url = glue("{host}:{port}/{method}"),
     body = body
-  ) %>% content %>% unlist
+  ) %>%
+    content %>%
+    unlist
+
+}
+
+post_Code_Params <- function(host, port, method, prod_Iterations, mail, timing){
+
+  print("xx")
+  body = paste0(
+    "&url=", sivis$url %>% URLencode(reserved = TRUE),
+    "&xpathes=", sivis$XPathes %>% URLencode(reserved = TRUE),
+    "&rootXPath=", sivis$rootXpath %>% URLencode(reserved = TRUE)
+  )
+
+  method <- "codeparams"
+  httr::POST(
+    url = glue("{host}:{port}/{method}"),
+    body = body
+  ) %>%
+    content %>%
+    unlist
+
+}
+
+
+# host = "http://192.168.1.11"
+# port = 7192
+# mailAddress = "liebrr@gmail.com"
+post_To_Production <- function(
+  mailAddress = "liebrr@gmail.com", doc = getActiveDocumentContext(), code_As_Is = FALSE,
+  host = "http://192.168.1.11", port = 7192, prod_Iterations = 1e5, ...){
+
+  ####### Debug Plumber if it works.
+  # # set productive
+  url <- paste0("http://192.168.1.11:7192/echo")
+  httr::GET(url = url, body = "msg=asd", timeout = 1) %>% content
+
+  rstudioapi::documentSave(id = doc$id)
+
+  mail <- URLencode(
+    URL = mailAddress,
+    reserved = TRUE,
+    repeated = TRUE
+  )
+
+  timing <- "" %>% #list(...)
+    safeDeparse() %>%
+    URLencode(reserved = TRUE)
+
+
+  if(code_As_Is){
+
+    post_Code_As_Is(host, port, method, doc, mailAddress, prod_Iterations, mail, timing)
+
+
+  }else{
+
+    post_Code_Params(host, port, method, prod_Iterations, mail, timing)
+
+  }
+
 }
 
 
