@@ -4,7 +4,8 @@
 
 RStudio Addin: Turning browser clicks into reproducible scraping code.
 
-![Usage of imageclipr](usage.gif)
+[![Sivis example](https://img.youtube.com/vi/tFZ3os-GoNA/0.jpg)](https://www.youtube.com/watch?v=tFZ3os-GoNA)
+
 
 ## Installation
 `devtools::install_github('Timag/sivis')`
