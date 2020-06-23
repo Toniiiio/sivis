@@ -11,18 +11,3 @@ RStudio Addin: Turning browser clicks into reproducible scraping code.
 
 ## Dependencies
 Chrome
-
-## Usage
-
-### Select the addin
-![Addin selection](clipboardImage_5.png)
-
-### Adding a keyboard shortcut (Recommended)
-In RStudio go to Tools - Modify Keyboard Shortcuts...
-
-![Find Shortcuts](clipboardImage_1.png)
-
-![Modify Shortcuts](clipboardImage_2.png)
-
-
-(This project is part of my life long application to RStudio :))
