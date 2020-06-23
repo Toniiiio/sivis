@@ -10,16 +10,7 @@ RStudio Addin: Turning browser clicks into reproducible scraping code.
 `devtools::install_github('Timag/sivis')`
 
 ## Dependencies
-Chrome,
-R packages `library(rstudioapi)`,  (`library(rmarkdown)`
-
-## Open issues
-- can not: 
-
--- copy and paste image and text together
-
--- copy and paste an image by copying the file in the explorer
-
+Chrome
 
 ## Usage
 
