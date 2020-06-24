@@ -3,7 +3,7 @@
 
 # Sivis: Turning browser clicks into reproducible scraping code.
 
-A framework for creating and monitoring scrapers efficiently in R(Studio).
+A framework for creating and monitoring scrapers in R(Studio).
 
 ## Example video:
 
