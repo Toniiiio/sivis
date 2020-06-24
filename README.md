@@ -13,6 +13,8 @@ A framework for creating and monitoring scrapers efficiently in R(Studio).
 ## Installation
 `devtools::install_github('Toniiiio/sivis')`
 
+Run `sivis::chrome_addin_tutorial()` for instructions to add the chrome addin.
+
 ## Dependencies
 Chrome
 
