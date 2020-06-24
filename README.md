@@ -1,7 +1,9 @@
-[![CRAN version](http://www.r-pkg.org/badges/version/imageclipr)](https://cran.r-project.org/package=imageclipr)
+[![CRAN version](http://www.r-pkg.org/badges/version/sivis)](https://cran.r-project.org/package=sivis)
 
 
 # Sivis: Turning browser clicks into reproducible scraping code.
+
+A framework for creating and monitoring scrapers efficiently in R(Studio).
 
 ## Example video:
 
@@ -9,7 +11,7 @@
 
 
 ## Installation
-`devtools::install_github('Timag/sivis')`
+`devtools::install_github('Toniiiio/sivis')`
 
 ## Dependencies
 Chrome
