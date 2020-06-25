@@ -2,7 +2,7 @@ The style guide is build on the tidyverse style guide: https://style.tidyverse.o
 
 1) The magrittr operator %<>% will be used
 
-### good
+- good
 price <- 323
 price %<>% paste(., "€")
 
