@@ -4,27 +4,25 @@ The style guide is build on the tidyverse style guide: https://style.tidyverse.o
 
 **good**
 
-price <- 323
-
-price %<>% paste(., "€")
+    price <- 323
+    price %<>% paste(., "€")
 
 
 **bad**
 
-price <- 323
-
-price <- price %>% paste(., "€")
+    price <- 323
+    price <- price %>% paste(., "€")
 
 
 - We value both expressive as well as short file names. If in conflict the first is preferred over the second.
 
 **good**
 
-share_price
+    share_price
 
 **bad**
 
-shr_prc
+    shr_prc
 
 - If possible seperate fachlich from technisch. First technisch then fachlich
   -- use pipes to encapsule technical parts 
@@ -34,18 +32,15 @@ more confusion than benefit.
 
 **good**
 
-txt <- "25.06.2020 APPLE 323,05 €"
-
-company <- strsplit(txt, split = " ") %>% 
-  unlist %>% 
-  .[2]
+    txt <- "25.06.2020 APPLE 323,05 €"
+    company <- strsplit(txt, split = " ") %>% 
+      unlist %>% 
+      .[2]
 
 
 **bad**
 
-txt <- "25.06.2020 APPLE 323,05 €"
-
-splitted <- strsplit(txt, split = " ")
-
-company <- splitted[[1]][2]
+    txt <- "25.06.2020 APPLE 323,05 €"
+    splitted <- strsplit(txt, split = " ")
+    company <- splitted[[1]][2]
 
