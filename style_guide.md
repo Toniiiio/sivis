@@ -1,6 +1,6 @@
 The style guide is build on the tidyverse style guide: https://style.tidyverse.org/pipes.html with the following emphasis / adaptions:
 
-- We value both expressive as well as short file names. If in conflict the first is preferred over the second.
+- Emphasis1: We value both expressive as well as short file names. If in conflict the first is preferred over the second.
 
 **good**
 
@@ -10,7 +10,7 @@ The style guide is build on the tidyverse style guide: https://style.tidyverse.o
 
     shr_prc
 
--  The magrittr operator %<>% will be used
+-  Adaption1:The magrittr operator %<>% will be used
 
 **good**
 
@@ -24,7 +24,7 @@ The style guide is build on the tidyverse style guide: https://style.tidyverse.o
     price <- price %>% paste(., "€")
 
 
-- If possible seperate fachlich from technisch. First technisch then fachlich
+- Emphasis2: If possible seperate fachlich from technisch. First technisch then fachlich
   -- use pipes to encapsule technical parts 
 
 In the following example this line `splitted <- strsplit(txt, split = " ")` is irrelevant to understand the process. The variable name brings
