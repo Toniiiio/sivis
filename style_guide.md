@@ -37,7 +37,8 @@ more confusion than benefit.
 **good**
 
     txt <- "25.06.2020 APPLE 323,05 €"
-    company <- strsplit(txt, split = " ") %>% 
+    company <- txt %>% 
+      strsplit(split = " ") %>% 
       unlist %>% 
       .[2]
 
