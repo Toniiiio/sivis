@@ -2,16 +2,17 @@ The style guide is build on the tidyverse style guide: https://style.tidyverse.o
 
 - Emphasis1: We value both expressive as well as short file names. If in conflict the first is preferred over the second.
 
-**good**
-
-    share_price
-
-**bad**
+**ok**
 
     shr_prc
 
+**better**
+
+    share_price
+
+
 In the context of sivis `hdr` (header) should be fairly expressive, but adding three characters and write `header` would be also ok.
-`body` would be preferred over `bdy` as only a single character would be saved.
+`body` would be preferred over `bdy` as only a single character would have to be added.
 
 -  Adaption1:The magrittr operator %<>% will be used
 
