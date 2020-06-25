@@ -2,21 +2,21 @@ The style guide is build on the tidyverse style guide: https://style.tidyverse.o
 
 1) The magrittr operator %<>% will be used
 
-# good
+### good
 price <- 323
 price %<>% paste(., "€")
 
-#bad
+### bad
 price <- 323
 price <- price %>% paste(., "€")
 
 
 2) We value both expressive as well as short file names. If in conflict the first is preferred over the second.
 
-# good 
+### good 
 share_price
 
-# bad
+### bad
 shr_prc
 
 3) if possible seperate fachlich from technisch. First technisch then fachlich
@@ -25,13 +25,13 @@ shr_prc
 In the following example this line `splitted <- strsplit(txt, split = " ")` is irrelevant to understand the process. The variable name brings
 more confusion than benefit.
 
-# good
+### good
 txt <- "25.06.2020 APPLE 323,05 €"
 company <- strsplit(txt, split = " ") %>% 
   unlist %>% 
   .[2]
 
-# bad
+### bad
 txt <- "25.06.2020 APPLE 323,05 €"
 splitted <- strsplit(txt, split = " ")
 company <- splitted[[1]][2]
