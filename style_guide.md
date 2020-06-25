@@ -44,3 +44,35 @@ more confusion than benefit.
     splitted <- strsplit(txt, split = " ")
     company <- splitted[[1]][2]
 
+- Adaption2: Spaces in if/while
+
+**good**
+
+    if(has_content){
+      
+      doc <- response %>% read_html
+      doc %>% html_nodes(xpath = "/div")
+      
+    } 
+
+**bad**
+
+    if(has_content){ 
+      doc <- response %>% read_html
+      doc %>% html_nodes(xpath = "/div")
+    } 
+
+
+- Emphasis3: Expressive names for if and while
+
+**good**
+    
+      has_content_type <- !is.null(contentType)
+      if(has_content_type){
+
+**bad**
+
+      if(!is.null(contentType))
+
+
+
