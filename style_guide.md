@@ -10,6 +10,9 @@ The style guide is build on the tidyverse style guide: https://style.tidyverse.o
 
     shr_prc
 
+In the context of sivis `hdr` (header) should be fairly expressive, but adding three characters and write `header` would be also ok.
+`body` would be preferred over `bdy` as only a single character would be saved.
+
 -  Adaption1:The magrittr operator %<>% will be used
 
 **good**
