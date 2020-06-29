@@ -18,3 +18,9 @@ Run `sivis::chrome_addin_tutorial()` for instructions to add the chrome addin.
 ## Dependencies
 Chrome
 
+## Usage
+
+In case target data is spread across multliple pages / requests 
+- choose as many data as possible
+- start on the second+ page. (first page data might be in another request)
+- check if first page data can be derived from the requests that yield the 2nd, 3rd,.. pages (often the case).
