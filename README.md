@@ -15,10 +15,12 @@ Transitioning from pre-alpha to alpha version. Therefore, i am open for feedback
 a lot of open issues, but i guess that will always stay that way as the scope is the www.
 
 Currently working on
-- transition to new style guide
+- transition to new style guide (style_guide.md)
 - switching to oo
 - removing major bugs
 
+If you are interested to learn more, need help with the setup or get involved, feel free to write me: andreas.liebrand@hof.uni-frankfurt.de.
+Any message is welcome!
 
 ## Installation
 `devtools::install_github('Toniiiio/sivis')`
