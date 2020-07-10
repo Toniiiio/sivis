@@ -9,6 +9,16 @@ A framework for creating and monitoring scrapers in R(Studio).
 
 [![Sivis example](image.png)](https://www.youtube.com/watch?v=tFZ3os-GoNA)
 
+## Status
+
+Transitioning from pre-alpha to alpha version. Therefore, i am open for feedback and contributions. There are still
+a lot of open issues, but i guess that will always stay that way as the scope is the www.
+
+Currently working on
+- transition to new style guide
+- switching to oo
+- removing major bugs
+
 
 ## Installation
 `devtools::install_github('Toniiiio/sivis')`
