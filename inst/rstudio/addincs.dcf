@@ -1,0 +1,9 @@
+Name: Create Scraper
+Description: Create a scraper after selecting text in Chrome
+Binding: create_scraper
+Interactive: false
+
+Name: Configuration
+Description: Configure the code creation
+Binding: config
+Interactive: true
