@@ -72,12 +72,16 @@ more confusion than benefit.
 
 **good**
     
-      has_content_type <- !is.null(contentType)
+      has_content_type <- !is.null(content_type)
       if(has_content_type){
-
+         ...
+      }
+      
 **bad**
 
-      if(!is.null(contentType))
+      if(!is.null(content_type)){
+         ...
+      }
 
 
 
