@@ -27,6 +27,8 @@ Any message is welcome!
 
 Run `sivis::chrome_addin_tutorial()` for instructions to add the chrome addin.
 
+If the addins do not appear in the "Addins" dropdown list after you have installed sivis, start a new Rstudio Session.
+
 ## Dependencies
 Chrome
 

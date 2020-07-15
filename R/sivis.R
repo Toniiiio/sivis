@@ -1516,7 +1516,7 @@ extract_html <- function(response_string, target_values, extract_pathes, xpath_f
   lengths <- target_values %>% nchar
   similar_ratio <- adist(x = target_values, y = result_values) %>%
     apply(MARGIN = 1, FUN = min) %>%
-    divide_by(lengths)
+    magrittr::divide_by(lengths)
 
   all_found <- similar_ratio %>%
     magrittr::is_less_than(sivis$tv_extract_ratio) %>%
