@@ -1,6 +1,6 @@
 .Rproj.user
 .Rhistory
 .RData
+.Ruserdata
 Notebook_Scraping.Rmd
-Notebook_Scraping.nb.html
-presenting.txt
+R/fromWeb/*

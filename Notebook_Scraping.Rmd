@@ -3,73 +3,98 @@ title: "R Notebook"
 output: html_notebook
 ---
 
-This is a scraping suggestion for the following website: .
-The required content was found in a GET request.
+This is a scraping suggestion for the following website: 
+https://www.r-bloggers.com/
 
 ```{r}
-library(DT)
+options(stringsAsFactors = FALSE)
+library(xml2)
 library(httr)
-# ", 1 + (nr - 1)*maxItems,"
-# ", maxItems*nr,"
-
-scraper <- list(
-	urlHTTP = "",
-	urlGen = function(nr){
-		maxItems <- 100
-		paste0("https://www.pepsicojobs.com/api/jobs?page=1&internal=false")
-	},
-	base = "jobs",
-	baseFollow = "data",
-	targetKeys = list("title")
-)
-
-
-output <- list()
-res <- "InitWithValue"
+library(DT)
+urlGen <- function(nr) 'https://www.r-bloggers.com/'
 nr <- 1
+hasResult <- TRUE
+output <- list()
 
-while(length(res)){
-	Sys.sleep(0.2)
+while(hasResult){
 	print(nr)
-	url <- scraper$urlGen(nr)
-	
-	res <- scheduledGET(url = url, targetKeys = scraper$targetKeys, base = scraper$base, baseFollow = scraper$baseFollow)$res
-	output[[nr]] <- res
+	url <- urlGen(nr)
+	response <- url %>% httr::GET() %>% httr::content(type = "text", encoding = "UTF-8")
+	xpath <- data.frame(
+		"/html/body/div/div/div/div/article/header/h3/a[not(descendant::*)]"
+	)
+	response <- tryCatch(
+		expr = response %>% xml2::read_html() %>% rvest::html_nodes(xpath = as.character(xpath)) %>% rvest::html_text(), 
+		error = function(e) NULL
+	)
+	hasResult <- length(response) & nr < 3
+	output[[nr]] <- response
 	nr <- nr + 1
-
-	######## INITIALLY ONLY ONE ROUND
-	res <- c()
-	######## INITIALLY ONLY ONE ROUND
 }
-tbl <- do.call(what = rbind, args = output)
-datatable(tbl)
 
+output %>% 
+	lapply(FUN = data.frame) %>% 
+	do.call(what = rbind) %>% 
+	DT::datatable()
 ```
+
+```{r}
+post_To_Production(host = "http://192.168.1.11")
+```
+
+
 
 Potential new fields to consider:
 
 ```{r}
+#load('multicol_filt_19.RData')
+
 library(shiny)
 
-choiceNames <- paste(paste("<b>", names(neighbours), "</b>"), as.character(neighbours), sep = ": ")
-choiceNames <- lapply(choiceNames, HTML)
-
-targetValue <- "12"
 ui <- fluidPage(
-	actionButton(inputId = "updateDocument", label = "Add selected keys to document:"),
+	h3(shiny::tags$b("Suggestions for additional data to scrape.")),
+	h5(shiny::tags$b("Click on columns to add/remove an xpath from the scraper.")),
 	br(),
-	checkboxGroupInput(inputId = "additionalKeys", label = "Additional keys to parse: ", choiceValues = as.list(names(neighbours)),
-	selected = "title", choiceNames = choiceNames)
+	DT::dataTableOutput("tbl", height = "30em"),
+	br(),
+	h5(shiny::tags$i("Rows are ordered so that empty columns are attempted to be avoided on the first page.")),
+	br(),
+	actionButton(
+		inputId = "update_document",
+		label = "Add selected columns to document:",
+		icon("paper-plane"),
+		style="color: #fff; background-color: #337ab7; border-color: #2e6da4"
+	)
 )
 server <- function(input, output, session){
-	observeEvent(eventExpr = input$updateDocument,{
-		print(input$additionalKeys)
-		file.remove("Notebook_Scraping.Rmd")
-		sivis$targetKeys <-  sapply(input$additionalKeys, strsplit, split = "[.]", USE.NAMES = FALSE)
-		createDocumentGETW()
+
+	observeEvent(eventExpr = input$update_document,{
+		#file.remove("Notebook_Scraping.Rmd")
+		root_xpath <- "/html/body/div/div/div/div/article" 
+		page_url <- "https://www.r-bloggers.com/" 
+		XPathes <- colnames(multicol_filt)[input$tbl_columns_selected + 1]
+		update_document(
+			XPathes = XPathes,
+			root_xpath = root_xpath,
+			page_url = page_url,
+			selectedCol = input$tbl_columns_selected %>% sort %>% safe_deparse
+)
 		stopApp(returnValue = invisible())
 	})
+
+	output$tbl = DT::renderDataTable(
+		DT::datatable(
+			data = multicol_filt,
+			selection = list(mode = "multiple", target = "column", selected = 0),
+			options = list(pageLength = 10, autoWidth = TRUE)
+		) %>%
+		DT::formatStyle(colnames(multicol_filt), lineHeight = "90%"),
+		server = FALSE,
+	)
 }
 
-runApp(appDir = shinyApp(ui, server), launch.browser = rstudioapi::viewer)
+runApp(
+	appDir = shinyApp(ui, server), 
+	launch.browser = shiny::paneViewer(minHeight = "maximize")
+)
 ```

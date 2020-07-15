@@ -1,0 +1,104 @@
+---
+title: "sivis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{sivis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+Scraping data can be summarized in three steps:
+
+1. Identify a request that will return us a document containing the data we attempt to scrape
+
+2. Find a path to extract the data from the document
+
+3. Schedule, monitor and maintain the scraper
+
+Sivis well assist you building and monitor scrapers fast and stable by automising repetitive steps. 
+
+This document introduces you to the basics of sivis.
+
+
+## Highlevel overview
+
+1. Request identification
+
+2. Path extraction
+
+3. Setting productive
+
+
+## 1. Request identification
+
+### The idea 
+
+When you learn about webscraping you are usually taught to differentiate between javascript and non-javascript pages and use httr/rvest or (r)selenium. You would either send a single request or send all requests related to a web page.
+I think this differentiation is not wrong, but i would propose an alternative view. 
+
+> A website consists on average of 70 requests, only one will yield your target information why would you want to load the other 69?
+
+One might argue that it is not easy to identify the correct request among the ~70 candidates and tideous work to collect the relevant meta data for building GET / POST requests. That is correct if it is attempted to be done manually, but sivis will assist you to automize this process as much as possible for you.
+
+### In a nutshell
+The identification of the correct request will be performed in a chrome extension. When the user opens a webpage in the Chrome, the browser will automatically perform all required requests related to this webpage. My idea was to interpose this process and check the contents of all requests, when being loaded, for our target data. Moreover, we can save the used meta data for the requests, like request header and -body.
+To select the target data the user will be given the possibility to select texts within the browser.
+
+Aggregating this information will yield us a rich data set, which will be sufficient to build a scraper from within R.
+This dataset will be transformed to a JSON object and loaded in the clipboard from where it can be accessed in R.
+
+## 2. Path extraction
+
+In order to find a path to extract the data from a given document, we first have to load the data in R by building a working request. We have the data that yielded a successful request from the browser. This data can not be used one to one, but is a great starting point and will yield succesful requests on most web pages that do not prohibit web scraping.
+
+Given this request we can download the document containg our target information. In order to find a path we first have to know which kind of document is present. It will be mostly either of type html/xml, a JSON or javascript code containing a JSON. It might rarely be the case that the target data is stored in unstructured text or intentionally modify the structure that the document can´t be identified as a JSON or html.
+
+In case of an html/xml document an xpath will be generated to extract the target information. For JSONS there aren´t as powerful extraction mechanisms as xpath, but a similar path will be generated.
+
+At the heart of this step are the function get_xpath_by_tag or get_xpath_by_text. Given an xml/html document the node(s) containing
+the target data will be identified and then the xpath will be generated "going up the tree" without adding unrelevant data or leaving relevant data behind.
+
+## 3. Setting in production
+
+Webpage structures change over time. The relevant request, the related request header or body, as well as pathes to extract the target data might change. The scraper have to be updated accordingly.
+To identify failed scrapers a logging framework is required. As the source of errors for scrapers in production is limited and their occurence highly repetitive, a logging and monitoring framework will be built specific to the needs of web scraping.
+
+
+## Features
+
+### Finding additional columns
+
+Relevant data might be spread across multiple columns. Selecting all data at once by the user in the browser might yield difficulties for the extraction. Manually label each column / variable might get cubersome for the user.
+
+Another possibility is to suggest additional variables / columns to the user.
+
+Goal:
+Find neighbour columns but avoid displaying other data, that is not a neighbour column.
+
+Strategy:
+
+Lets say the current target column has 50 elements. If we go up the tree and remain
+with 50 elements, no additional data from "neighbour" branches should be excluded.*
+
+From there we analyse all leaves, that dont have children nodes. Therefore, we should
+get all data that belongs to the same branch.**
+
+#### Details:
+
+Additional columns / variables will be added via the function add_multi_cols.
+
+
+
+### Drawbacks
+
+While the amount of time being saved is surprisingly high, sivis is by no means an attempt to fully automize the process. A potential drawback of using sivis is that the users might expect from sivis to fully automize the scraping process and miss out simultaneously building up the required skills to build and maintain web scrapers in R.
+
+I want to enable and challenge the user to learn the steps sivis performs in order to build the necessary skills to complement sivis scrapers for the part of scraping which cant be fully automised. Therefore, learning material will attempted to be integrated.

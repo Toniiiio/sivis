@@ -1,2 +1,2 @@
-^mypkg2\.Rproj$
+^.*\.Rproj$
 ^\.Rproj\.user$

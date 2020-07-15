@@ -1,15 +1,20 @@
-Package: mypkg2
+Package: sivis
 Title: What the Package Does (One Line, Title Case)
 Version: 0.0.0.9000
 Authors@R: 
-    person(given = "First",
-           family = "Last",
+    person(given = "Andreas Tonio",
+           family = "Liebrand",
            role = c("aut", "cre"),
-           email = "first.last@example.com",
+           email = "andreas.liebrand@hof.uni-frankfurt.de",
            comment = structure("YOUR-ORCID-ID", .Names = "ORCID"))
 Description: What the package does (one paragraph).
 License: What license it uses
 Encoding: UTF-8
 LazyData: true
+Imports: magrittr, xml2, rvest, rstudioapi, stringr, glue, httr, jsonlite, DT, dplyr, mgsub, RSQLite
 Suggests: 
-    testthat (>= 2.1.0)
+    testthat (>= 2.1.0),
+    knitr,
+    rmarkdown
+RoxygenNote: 7.1.0
+VignetteBuilder: knitr

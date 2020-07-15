@@ -763,6 +763,10 @@ create_run_request <- function(cb_data){
 
     xpath_from_browser <- cb_data$clipBoardText$XPath
     target_values <- sivis$cb_data$clipBoardText$selected_text
+
+    missing_dir <- !dir.exists("R/fromWeb")
+    if(missing_dir) dir.create("R/fromWeb")
+
     fileName <- paste0(file.path(getwd(), "R/fromWeb", substring(text = urlShort, first = 1, last = 101)), ".RData")
     # print(fileName)
     save(sivis, file = fileName)
