@@ -420,7 +420,8 @@ check_robotstxt <- function(page_url){
 
 create_run_request <- function(cb_data){
 
-  if(is.null(cb_data$clipBoardText)){
+  no_valid_clipboard <- is.null(cb_data$clipBoardText)
+  if(no_valid_clipboard){
 
     stop("No clipboard text found. The data from the Chrome addin is not sufficient. Please file an issue.")
 
@@ -438,7 +439,8 @@ create_run_request <- function(cb_data){
   sivis$headers <- cb_data$request$request$headers %>%
     {setNames(object = .$value, nm = .$name)}
 
-  if(grepl(pattern = "br", sivis$headers["accept-encoding"])){
+  has_brotli_encoding <- grepl(pattern = "br", sivis$headers["accept-encoding"])
+  if(has_brotli_encoding){
 
     message("Info: removing br(otli) as accepted encoding as its not supported by curl.")
     sivis$headers["accept-encoding"] <- gsub(pattern = ", br|br, ", replacement = "", x = sivis$headers["accept-encoding"])
@@ -479,12 +481,11 @@ create_run_request <- function(cb_data){
   assign("url", value = url, envir = sivis)
   # if GET request was already performed in this session dont perform it again to avoid extensive amount of requests for the same server
   contact_details <- NULL
-  agentName <- paste(contact_details, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36")
-  #        user_agent(agentName)
+  user_agent_name <- paste(contact_details, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36")
+  # user_agent(user_agent_name)
   sivis$resp_content <- list()
 
   req_method <- sivis$cb_data$request$request$method
-  req_method
 
   already_scraped <- sivis$url %in% names(sivis$resp_content)
 
