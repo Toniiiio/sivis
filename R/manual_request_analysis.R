@@ -9,6 +9,7 @@
 #' @examples
 #' data("doc_html")
 #' show_html_page(doc_html)
+#'
 show_html_page <- function(doc, encode = "UTF-8", fileExt = ".html", browser = rstudioapi::viewer, encodeIfNeeded  = FALSE){
   tmp <- tempfile(fileext = fileExt)
   doc %>% toString(encode = encode) %>% writeLines(con = tmp)

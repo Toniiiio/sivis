@@ -895,6 +895,7 @@ create_scraper <- function(){
 #' \item{use_header = Binary parameter (true / false) should the request header be used or not for the request from R.}
 #'}
 
+
 prepare_extraction <- function(sivis){
 
   extract_meta <- list()
@@ -2533,7 +2534,7 @@ create_document_get <- function(page_url = page_url, target_keys = NULL, extract
 #' @seealso \code{\link{update_document}}
 
 create_document <- function(page_url, extract_pathes, response_string, test_eval = FALSE, req_method = "GET", Code_3_Extract = NULL,
-                            use_header = FALSE, body = NULL, XPathes = "", searchMultiPage = TRUE, search_multi_cols = TRUE, rCode = NULL){
+                            use_header = FALSE, body = NULL, XPathes = "", search_multi_page = TRUE, search_multi_cols = TRUE, rCode = NULL){
 
   sivis$req_method <- req_method
   sivis$response_string <- response_string
@@ -2595,7 +2596,7 @@ create_document <- function(page_url, extract_pathes, response_string, test_eval
       requestCode = sivis$xhrRequest
     )
 
-    if(searchMultiPage){
+    if(search_multi_page){
       newurl_func <- url_func %>%
         deparse %>%
         trimws %>%
@@ -2631,24 +2632,28 @@ create_document <- function(page_url, extract_pathes, response_string, test_eval
       ), collapse = "\n")
     }
 
-    Request_Extract <- paste(c(Code_2_Request, Code_3_Extract), collapse = "\n")
+    request_extract <- paste(c(Code_2_Request, Code_3_Extract), collapse = "\n")
 
-    if(searchMultiPage){
+    if(search_multi_page){
 
       url_func <- dynamic_url(
         url = sivis$url,
-        requestCode = Request_Extract
+        request_code = request_extract
       )$func
 
-      if(is.null(url_func)){
+      no_url_func <- is.null(url_func)
+      if(no_url_func){
         url_func <- glue::glue("function(nr) '{sivis$url}'") %>% toString
       }
 
       # need this for update_document function
       sivis$isMultiPage <- !is.null(url_func)
       sivis$page_url <- url_func
+
     }else{
+
       url_func <- sivis$page_url
+
     }
 
     getFinishTemplate <- ""
@@ -2697,7 +2702,7 @@ create_document <- function(page_url, extract_pathes, response_string, test_eval
     }
 
     # todo: do i still need this reproduce? already did it here?
-    sivis$reproduceForPageChange <- Request_Extract
+    sivis$reproduceForPageChange <- request_extract
 
   }
 
