@@ -149,7 +149,7 @@ get_page_parameter_html_url <- function(url, codeBefore, codeAfter){
 
   hasNumericParams <- decoded$params %>%
     data.frame %>%
-    filter(type == "hasNumeric") %>%
+    dplyr::filter(type == "hasNumeric") %>%
     dplyr::filter(val >= 0) %>%
     nrow
 
