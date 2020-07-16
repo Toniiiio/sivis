@@ -5,6 +5,8 @@
 
 A framework for creating and monitoring scrapers in R(Studio).
 
+> A website consists on average of 70 requests, only one will yield your target information. Why would you want to load the other 69?
+
 ## Example video:
 
 [![Sivis example](image.png)](https://www.youtube.com/watch?v=tFZ3os-GoNA)
