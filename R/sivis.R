@@ -996,22 +996,23 @@ prepare_extraction <- function(sivis){
 
   if(length(fuzzy_matches)){
 
-    fuzzyBefore <- not_match_before[fuzzy_matches] %>%
+    fuzzy_before <- not_match_before[fuzzy_matches] %>%
       paste(collapse = '\", \"') %>%
       c('"', ., '"') %>%
       paste(collapse = "")
 
-    fuzzyAfter <- not_match_after[fuzzy_matches] %>%
+    fuzzy_after <- not_match_after[fuzzy_matches] %>%
       paste(collapse = '\", \"') %>%
       c('"', ., '"') %>%
       paste(collapse = "")
 
-    warning(glue::glue("target_values:\n {fuzzyBefore} \nchanged to\n {fuzzyAfter}, \nbecause they where not found with a direct match. But only with a fuzzy match using a fuzzy parameter of {sivis$param_fuzzy}. \nConsider configuring that parameter if that change was inaccurate."))
+    warning(glue::glue("target_values:\n {fuzzy_before} \nchanged to\n {fuzzy_after}, \nbecause they where not found with a direct match. But only with a fuzzy match using a fuzzy parameter of {sivis$param_fuzzy}. \nConsider configuring that parameter if that change was inaccurate."))
 
   }
 
   new_target_values  %<>% unlist
-  if(length(new_target_values)) target_values <- new_target_values  %>% unlist
+  has_new_tv <- length(new_target_values)
+  if(has_new_tv) target_values <- new_target_values  %>% unlist
 
   # split for text/html, because dont want to differentiate between encoding!?
   content_type <- get_result$headers$`content-type`
@@ -1035,7 +1036,8 @@ prepare_extraction <- function(sivis){
 
   # check if json is within string.
   resource_type <- sivis$cb_data$request$`_resource_type`
-  if(is.null(resource_type)) resource_type  <- ""
+  has_resource_type <- !is.null(resource_type)
+  if(!has_resource_type) resource_type  <- ""
   if(resource_type == "script" & doc_type == "application/json") doc_type <- "script/json"
 
   extract_meta$doc_type <- doc_type
