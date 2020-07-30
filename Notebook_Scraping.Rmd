@@ -4,14 +4,14 @@ output: html_notebook
 ---
 
 This is a scraping suggestion for the following website: 
-https://hansa-heemann.dvinci.de/de/jobs
+function(nr) 'https://www.r-bloggers.com/'
 
 ```{r}
 options(stringsAsFactors = FALSE)
 library(xml2)
 library(httr)
 library(DT)
-urlGen <- function(nr) 'https://hansa-heemann.dvinci.de/de/jobs'
+urlGen <- function(nr) 'https://www.r-bloggers.com/'
 nr <- 1
 hasResult <- TRUE
 output <- list()
@@ -19,9 +19,9 @@ output <- list()
 while(hasResult){
 	print(nr)
 	url <- urlGen(nr)
-	response <- url %>% httr::GET(add_headers(.headers = c(":method" = "GET", ":authority" = "hansa-heemann.dvinci.de", ":scheme" = "https", ":path" = "/de/jobs", "user-agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36", accept = "*/*", "sec-fetch-site" = "same-origin", "sec-fetch-mode" = "cors", "sec-fetch-dest" = "empty", referer = "https://hansa-heemann.dvinci.de/de/jobs", "accept-encoding" = "gzip, deflate", "accept-language" = "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7", cookie = "_ga=GA1.2.1342415111.1593811153; JSESSIONID=72ACC8279A5433EA222BAF701A9C49F3; _gid=GA1.2.523488745.1594975022; _gat_gtag_UA_123957930_2=1"))) %>% httr::content(type = "text", encoding = "UTF-8")
+	response <- url %>% httr::GET() %>% httr::content(type = "text", encoding = "UTF-8")
 	xpath <- data.frame(
-		"/html/body/div/div/div/div/div/table/tbody/tr/td/a[not(descendant::*)]"
+		"/html/body/div/div/div/div/article/header/h3/a[not(descendant::*)]"
 	)
 	response <- tryCatch(
 		expr = response %>% xml2::read_html() %>% rvest::html_nodes(xpath = as.character(xpath)) %>% rvest::html_text(), 
@@ -70,14 +70,14 @@ server <- function(input, output, session){
 
 	observeEvent(eventExpr = input$update_document,{
 		#file.remove("Notebook_Scraping.Rmd")
-		root_xpath <- "/html/body/div/div/div/div/div/table/tbody/tr" 
-		page_url <- "https://hansa-heemann.dvinci.de/de/jobs" 
+		root_xpath <- "/html/body/div/div/div/div/article" 
+		page_url <- "function(nr) 'https://www.r-bloggers.com/'" 
 		XPathes <- colnames(multicol_filt)[input$tbl_columns_selected + 1]
 		update_document(
 			XPathes = XPathes,
 			root_xpath = root_xpath,
 			page_url = page_url,
-			selectedCol = input$tbl_columns_selected %>% sort %>% safe_deparse
+			selected_col = input$tbl_columns_selected %>% sort %>% safe_deparse
 )
 		stopApp(returnValue = invisible())
 	})

@@ -84,4 +84,27 @@ more confusion than benefit.
       }
 
 
+- Emphasis4: Avoid double negation in if(), while() checks
 
+**good**
+
+    has_content <- !is.null(content)
+    if(!has_content){ 
+      warning("no content")
+    }
+    
+    has_content <- !is.null(content)
+    if(has_content){ 
+      # use content
+    }
+
+
+
+**bad**
+
+    no_content <- is.null(content)
+    if(!no_content){ 
+      # use content
+    }
+
+--> "!no_content" is unnecessary complicated to read
