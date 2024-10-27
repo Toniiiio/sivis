@@ -21,7 +21,7 @@ Currently working on
 - switching to oo
 - removing major bugs
 
-If you are interested to learn more, need help with the setup or get involved, feel free to write me: andreas.liebrand@hof.uni-frankfurt.de.
+If you are interested to learn more, need help with the setup or get involved, feel free to write me on linkedin.
 Any message is welcome!
 
 ## Installation
